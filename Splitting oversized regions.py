@@ -22,7 +22,7 @@ from scipy.spatial.distance import cdist, euclidean
 
 
 d = 2      # dimension of the ambient space
-N = 100     # size of the data set
+N = 20000     # size of the data set
 k = 3 
 m = 10    # number of units
 
@@ -379,10 +379,10 @@ for group in r:
     XX = X[group]
     xs = XX[:,0]
     ys = XX[:,1]
-    ax.scatter(xs, ys)
+    #ax.scatter(xs, ys)
     
-for p in meds:
-    ax.scatter(p[0],p[1], c = 'black')
+#for p in meds:
+    #ax.scatter(p[0],p[1], c = 'black')
 
 w = hyperplane_through_medians(r, X)
 x = np.array([-3,8])
@@ -391,7 +391,7 @@ wx = -w[0]/w[1]
 wc = -w[2]/w[1]
 y = wx*x + wc
 
-ax.plot(x,y, c = 'gray')
+#ax.plot(x,y, c = 'gray')
 
 # In[262]:
 
@@ -410,7 +410,7 @@ region_cardinalities = [[],[]]
 for mar in range(2):
     fig = plt.figure()
     ax = fig.add_subplot()
-    ax.scatter(X[:,0], X[:,1], c = 'black')
+    #ax.scatter(X[:,0], X[:,1], c = 'black')
     ax.set_ylim(-3,9)
     
     W = []
@@ -421,7 +421,7 @@ for mar in range(2):
         if k == m-1:
             for i in indices:
                 region_cardinalities[mar] += [len(i)]
-                ax.scatter(X[i,0], X[i,1])
+                #ax.scatter(X[i,0], X[i,1])
         w = hyperplane_through_medians(indices, X, mar)
         f = linear(w)
         R = update_region_array(X, R, [f,zero], k)
@@ -430,7 +430,8 @@ for mar in range(2):
         wx = -w[0]/w[1]
         wc = -w[2]/w[1]
         y = wx*x + wc
-        ax.plot(x,y, c = 'gray')
+        print('Done', k)
+        #ax.plot(x,y, c = 'gray')
 
 
 
@@ -442,4 +443,3 @@ for mar in range(2):
 
 print(np.std(region_cardinalities[0]),
       np.std(region_cardinalities[1]))
-
