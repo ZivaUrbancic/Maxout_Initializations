@@ -8,9 +8,12 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+#from matplotlib import cm
 from scipy.linalg import null_space
+from scipy.spatial.distance import cdist, euclidean
 
-np.random.seed(64432)
+
+#np.random.seed(64433)
 
 
 # # Creating data
@@ -19,12 +22,12 @@ np.random.seed(64432)
 
 
 d = 2      # dimension of the ambient space
-N = 30     # size of the data set
+N = 100     # size of the data set
 k = 3 
-m = 6    # number of units
+m = 10    # number of units
 
 X1 = np.random.normal(0, 1, (N, d))
-X2 = np.random.normal((5,1), 1, (N, d))
+X2 = np.random.normal((4,3), 1, (N, d))
 X3 = np.random.normal((0,5), 1, (N, d))
 
 N *= 3
@@ -34,9 +37,9 @@ X = np.concatenate((X1,X2,X3))
 xs = X[:, 0]
 ys = X[:, 1]
 
-fig = plt.figure()
-ax = fig.add_subplot()
-ax.scatter(xs, ys)
+#fig = plt.figure()
+#ax = fig.add_subplot()
+#ax.scatter(xs, ys)
 
 
 # # Sample initial weight
@@ -51,9 +54,9 @@ weight_0
 # In[349]:
 
 
-def median_point(Y):
+def marginal_median(Y):
     '''
-    Find the median point of a data set Y.
+    Find the marginal median of a data set Y.
 
     Parameters
     ----------
@@ -75,6 +78,35 @@ def median_point(Y):
         
     return np.array(point)
 
+# copied from https://stackoverflow.com/questions/30299267/geometric-median-of-multidimensional-points
+
+def geometric_median(X, eps=1e-5):
+    y = np.mean(X, 0)
+
+    while True:
+        D = cdist(X, [y])
+        nonzeros = (D != 0)[:, 0]
+
+        Dinv = 1 / D[nonzeros]
+        Dinvs = np.sum(Dinv)
+        W = Dinv / Dinvs
+        T = np.sum(W * X[nonzeros], 0)
+
+        num_zeros = len(X) - np.sum(nonzeros)
+        if num_zeros == 0:
+            y1 = T
+        elif num_zeros == len(X):
+            return y
+        else:
+            R = (T - y) * Dinvs
+            r = np.linalg.norm(R)
+            rinv = 0 if r == 0 else num_zeros/r
+            y1 = max(0, 1-rinv)*T + min(1, rinv)*y
+
+        if euclidean(y, y1) < eps:
+            return y1
+
+        y = y1
 
 # In[72]:
 
@@ -95,9 +127,13 @@ def hyperplane_through_points(Y):
         DESCRIPTION.
 
     '''
-    # Y is a list (or array) of d points in R^d
     
-    d = Y[0].shape[0]
+    Y = np.array(Y)
+    #print(Y.shape)
+    
+    assert Y.shape[1] >= Y.shape[0], 'More data points than dimensions'
+    
+    d = Y.shape[0]
     matrix = np.concatenate((Y, np.ones((d,1))), axis = 1)
     
     return null_space(matrix).transpose()[0]
@@ -115,7 +151,7 @@ R = np.concatenate((np.zeros((N,m), dtype=int),
 # In[235]:
 
 
-def linear(weight, bias):
+def linear(weights_and_bias):
     '''
     Create affine linear function f: R^n -> R with given weights and bias.
 
@@ -133,10 +169,10 @@ def linear(weight, bias):
 
     '''
     def f(x):
-        return np.dot(x,weight) + bias
+        return np.dot(x,weights_and_bias[:-1]) + weights_and_bias[-1]
     return f
 
-def linear_list(weight, biases):
+def linear_list(weights_and_biases):
     '''
     Create a list of affine linear functions R^n -> R with given
     weights and biases.
@@ -155,8 +191,8 @@ def linear_list(weight, biases):
 
     '''
     l = []
-    for bias in biases:
-        l += [linear(weight, bias)]
+    for w in weights_and_biases:
+        l += [linear(w)]
     return l
 
 def regions(X, functions):
@@ -189,34 +225,15 @@ def regions(X, functions):
     
     return reg
 
-def update_region_array(R, regs, c):
-    '''
-    Updates the regions matrix R with the new regions information
-    by inserting the list regs in the c^th column.
-
-    Parameters
-    ----------
-    R : Array
-        Current regions matrix.
-    regs : List or Array
-        New column of region indices.
-    c : Int
-        Index of the column to be updated.
-
-    Returns
-    -------
-    Array
-        New regions matrix.
-
-    '''
+def update_region_array(X, R, functions, c):
     
+    sorted_X = X[R[:,-1]]
+    regs = regions(sorted_X, functions)
     r = R.copy()
-
     r[:,c] = regs
-    np.sort(r,0)
+    sorted_indices = np.lexsort(np.rot90(r))
 
-    
-    return r[np.lexsort(np.rot90(r))]
+    return r[sorted_indices]
 
 
 # In[239]:
@@ -226,13 +243,12 @@ def update_region_array(R, regs, c):
 # In[238]:
 
 
-f1 = linear([1,0],0)
-f2 = linear([0,1],0)
-f3 = linear([0,0],0)
+f1 = linear([1,0,0])
+f2 = linear([0,1,0])
+f3 = linear([0,0,0])
 
-R_ = update_region_array(R, regions(X, [f1,f2,f3]), 2)
+R_ = update_region_array(X, R, [f1,f2,f3], 2)
 
-R_
 
 
 # In[ ]:
@@ -282,48 +298,82 @@ def find_ordered_region_indices(R):
     # Sort region indices by size (and reverse to sort largest -> smallest)
     sorted_region_indices = np.argsort(region_sizes)[::-1]
     
+    
     return [region_groups[i] for i in sorted_region_indices]
 
-def top_d_median_points(ordered_indices, d, X):
+def top_k_median_points(ordered_indices, X,
+                        k = -1,
+                        marginal = False):
     '''
-    Compute the medians of the largest d regions as given by ordered_indices.
+    Compute the medians of the largest k regions as given by ordered_indices.
 
     Parameters
     ----------
     ordered_indices : List
         List of lists of indices, ordered by group size.
-    d : Int
+    X : Array
+        Data set.
+    k : Int
         Number of regions whose medians will be computed.
+
+    Returns
+    -------
+    medians : List
+        List of medians of the k largest regions.
+
+    '''
+    
+    if k == -1:
+        k = X.shape()[1]
+
+    medians = []
+
+    for i in range(k):
+        indices = ordered_indices[i]
+        data = X[indices]
+        #print(data, marginal_median(data), '\n\n\n')
+        if marginal:
+            medians += [marginal_median(data)]
+        else:
+            medians += [geometric_median(data)]
+    
+    return medians
+
+def hyperplane_through_medians(ordered_indices, X,
+                               marginal = False):
+    '''
+    Create hyperplane through the medians of the largest regions
+    (as many as possible).
+
+    Parameters
+    ----------
+    ordered_indices : List
+        List of indices.
     X : Array
         Data set.
 
     Returns
     -------
-    medians : List
-        List of medians of the d largest regions.
-
+    Array
+        Normal vector to the hyperplane in R^{d+1}.
+     
     '''
-
-    medians = []
-
-    for i in range(d):
-        indices = ordered_indices[i]
-        data = X[indices]
-        medians += [median_point(data)]
-
-    return medians
-
+    
+    k = min(X.shape[1], len(ordered_indices))
+    points = top_k_median_points(ordered_indices, X, k, marginal)
+    
+    #points_plot = np.array(points)
+    #ax.scatter(points_plot[:,0], points_plot[:,1], c = 'r')
+    
+    return hyperplane_through_points(points)
 
 # In[350]:
 
-
-top_d_median_points(find_ordered_region_indices(R_), d, X)
-
 r = find_ordered_region_indices(R_)
-meds = top_d_median_points(r, d, X)
+meds = top_k_median_points(r, X, d)
 
 fig = plt.figure()
-ax = fig.add_subplot()#projection='2d')
+ax = fig.add_subplot()
 
 for group in r:
     XX = X[group]
@@ -333,17 +383,63 @@ for group in r:
     
 for p in meds:
     ax.scatter(p[0],p[1], c = 'black')
-    
 
-meds
+w = hyperplane_through_medians(r, X)
+x = np.array([-3,8])
 
+wx = -w[0]/w[1]
+wc = -w[2]/w[1]
+y = wx*x + wc
+
+ax.plot(x,y, c = 'gray')
 
 # In[262]:
 
+R = np.concatenate((np.zeros((N,m), dtype=int),
+                np.arange(N).reshape(-1,1)),
+               axis = 1)
+
+def zero(x):
+    return 0
+
+
+
+
+region_cardinalities = [[],[]]
+
+for mar in range(2):
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    ax.scatter(X[:,0], X[:,1], c = 'black')
+    ax.set_ylim(-3,9)
     
+    W = []
+    
+    x = np.array([-3,8])
+    for k in range(m):
+        indices = find_ordered_region_indices(R)
+        if k == m-1:
+            for i in indices:
+                region_cardinalities[mar] += [len(i)]
+                ax.scatter(X[i,0], X[i,1])
+        w = hyperplane_through_medians(indices, X, mar)
+        f = linear(w)
+        R = update_region_array(X, R, [f,zero], k)
+        W += [w]
+        
+        wx = -w[0]/w[1]
+        wc = -w[2]/w[1]
+        y = wx*x + wc
+        ax.plot(x,y, c = 'gray')
+
+
 
 # In[ ]:
 
+#fig, ax = plt.subplots()
+#ax.plot(region_cardinalities[0], c = 'green')
+#ax.plot(region_cardinalities[1], c = 'magenta')
 
-
+print(np.std(region_cardinalities[0]),
+      np.std(region_cardinalities[1]))
 
