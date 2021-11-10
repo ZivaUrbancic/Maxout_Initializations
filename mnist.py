@@ -48,7 +48,8 @@ def sample_MNIST(train_dataset,N,random=False):
             label_counter[train_dataset.targets[i]] += 1
         if len(Xlabelsout) == N*10:
             break
-    return Xout,Xlabelsout
+    print(Xlabelsout, "\n", Xout)
+    return np.array(Xout),np.array(Xlabelsout)
 
 def sample_MNIST_projected(X,Xlabels,N,random=False):
     indices = np.arange(len(Xlabels))
