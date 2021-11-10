@@ -1,18 +1,18 @@
 # loading MNIST
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision
-import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
+#import torch
+#import torch.nn as nn
+#import torch.nn.functional as F
+#import torchvision
+#import torchvision.transforms as transforms
+#import matplotlib.pyplot as plt
 import numpy as np
 
-train_dataset = torchvision.datasets.MNIST(root='./data',
-                                           train=True,
-                                           download=True)
-train_loader = torch.utils.data.DataLoader(train_dataset,
-                                           batch_size=64,
-                                           shuffle=True)
+#train_dataset = torchvision.datasets.MNIST(root='./data',
+#                                           train=True,
+#                                           download=True)
+#train_loader = torch.utils.data.DataLoader(train_dataset,
+#                                           batch_size=64,
+#                                           shuffle=True)
 
 # show some random training images
 # def imshow(img):
@@ -48,6 +48,4 @@ def load_MNIST_projected(X,Xlabels,N,random=False):
             label_counter[Xlabels[i]] += 1
         if len(Xlabelsout) == N*10:
             break
-    return Xout,Xlabelsout
-
-load_MNIST_projected(X,Xlabels,1)
+    return np.array(Xout), np.array(Xlabelsout)
