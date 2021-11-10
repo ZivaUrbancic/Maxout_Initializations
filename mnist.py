@@ -34,7 +34,23 @@ X = np.load("MNISTprojected.npy")
 Xlabels = np.load("MNISTlabels.npy")
 
 # loads N points from each class
-def load_MNIST_projected(X,Xlabels,N,random=False):
+def sample_MNIST(train_dataset,N,random=False):
+    indices = np.arange(len(train_dataset.targets))
+    if random:
+        np.random.shuffle(indices)
+    label_counter = np.zeros(10)
+    Xout = []
+    Xlabelsout = []
+    for i in indices:
+        if label_counter[train_dataset.targets[i]]<N:
+            Xout += [train_dataset.data[i]]
+            Xlabelsout += [train_dataset.targets[i]]
+            label_counter[train_dataset.targets[i]] += 1
+        if len(Xlabelsout) == N*10:
+            break
+    return Xout,Xlabelsout
+
+def sample_MNIST_projected(X,Xlabels,N,random=False):
     indices = np.arange(len(Xlabels))
     if random:
         np.random.shuffle(indices)
@@ -49,3 +65,5 @@ def load_MNIST_projected(X,Xlabels,N,random=False):
         if len(Xlabelsout) == N*10:
             break
     return np.array(Xout), np.array(Xlabelsout)
+
+# load_MNIST_projected(X,Xlabels,1)
