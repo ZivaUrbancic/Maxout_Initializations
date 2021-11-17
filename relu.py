@@ -66,9 +66,9 @@ output_normalisation = nn.LogSoftmax()
 class ReLUNet(nn.Module):
     def __init__(self):
         super(ReLUNet, self).__init__()
-        self.layer1 = nn.Linear(28*28, 512)
-        self.layer2 = nn.Linear(512, 128)
-        self.layer3 = nn.Linear(128, 10)
+        self.layer1 = nn.Linear(28*28, 32)
+        self.layer2 = nn.Linear(32, 16)
+        self.layer3 = nn.Linear(16, 10)
 
 
     def forward(self, x):
@@ -78,61 +78,63 @@ class ReLUNet(nn.Module):
         x = output_normalisation(self.layer3(x))
         return x
 
-X, X_labels = sample_MNIST(train_dataset, 1000)
-model = initialise_ReLU_network(ReLUNet().to(device),X)
-# =============================================================================
-# 
-# 
-# criterion = nn.CrossEntropyLoss()
-# optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-# 
-# n_total_steps = len(train_loader)
-# for epoch in range(num_epochs):
-#     for i, (images, labels) in enumerate(train_loader):
-#         images, labels = images.to(device), labels.to(device)
-# 
-#         # Forward pass
-#         outputs = model(images)
-#         loss = criterion(outputs, labels)
-# 
-#         # Backward and optimize
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-# 
-#         if (i+1) % 200 == 0:
-#             print (f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
-# 
-# print('Finished Training')
-# # PATH = './reluMNIST.pth'
-# # torch.save(model.state_dict(), PATH)
-# 
-# with torch.no_grad():
-#     n_correct = 0
-#     n_samples = 0
-#     n_class_correct = [0 for i in range(10)]
-#     n_class_samples = [0 for i in range(10)]
-#     for images, labels in test_loader:
-#         images = images.to(device)
-#         labels = labels.to(device)
-#         outputs = model(images)
-#         # max returns (value ,index)
-#         _, predicted = torch.max(outputs, 1)
-#         n_samples += labels.size(0)
-#         n_correct += (predicted == labels).sum().item()
-# 
-#         for i in range(labels.size(0)):
-#             label = labels[i]
-#             pred = predicted[i]
-#             if (label == pred):
-#                 n_class_correct[label] += 1
-#             n_class_samples[label] += 1
-# 
-#     acc = 100.0 * n_correct / n_samples
-#     print(f'Accuracy of the network: {acc} %')
-# 
-#     for i in range(10):
-#         acc = 100.0 * n_class_correct[i] / n_class_samples[i]
-#         print(f'Accuracy of {classes[i]}: {acc} %')
-# 
-# =============================================================================
+X, X_labels = sample_MNIST(train_dataset, 2)
+
+unit_vecs = np.eye(10)
+R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
+
+model = ReLUNet().to(device)
+#initialise_ReLU_network(model, X, R10_labels)
+
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+
+n_total_steps = len(train_loader)
+for epoch in range(num_epochs):
+    for i, (images, labels) in enumerate(train_loader):
+        images, labels = images.to(device), labels.to(device)
+
+        # Forward pass
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+
+        # Backward and optimize
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if (i+1) % 200 == 0:
+            print (f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
+
+print('Finished Training')
+# PATH = './reluMNIST.pth'
+# torch.save(model.state_dict(), PATH)
+
+with torch.no_grad():
+    n_correct = 0
+    n_samples = 0
+    n_class_correct = [0 for i in range(10)]
+    n_class_samples = [0 for i in range(10)]
+    for images, labels in test_loader:
+        images = images.to(device)
+        labels = labels.to(device)
+        outputs = model(images)
+        # max returns (value ,index)
+        _, predicted = torch.max(outputs, 1)
+        n_samples += labels.size(0)
+        n_correct += (predicted == labels).sum().item()
+
+        for i in range(labels.size(0)):
+            label = labels[i]
+            pred = predicted[i]
+            if (label == pred):
+                n_class_correct[label] += 1
+            n_class_samples[label] += 1
+
+    acc = 100.0 * n_correct / n_samples
+    print(f'Accuracy of the network: {acc} %')
+
+    for i in range(10):
+        acc = 100.0 * n_class_correct[i] / n_class_samples[i]
+        print(f'Accuracy of {classes[i]}: {acc} %')
+
