@@ -1,5 +1,5 @@
 # loading MNIST
-#import torch
+import torch
 #import torch.nn as nn
 #import torch.nn.functional as F
 #import torchvision
@@ -43,13 +43,16 @@ def sample_MNIST(train_dataset,N,random=False):
     Xlabelsout = []
     for i in indices:
         if label_counter[train_dataset.targets[i]]<N:
-            Xout += [train_dataset.data[i]]
-            Xlabelsout += [train_dataset.targets[i]]
+            Xout += [torch.unsqueeze(train_dataset.data[i], 0)]
+            Xlabelsout += [torch.unsqueeze(train_dataset.targets[i], 0)]
             label_counter[train_dataset.targets[i]] += 1
         if len(Xlabelsout) == N*10:
             break
-    print(Xlabelsout, "\n", Xout)
-    return np.array(Xout),np.array(Xlabelsout)
+    XXout = torch.Tensor(len(Xout), 28, 28)
+    XXlabelsout = torch.Tensor(len(Xlabelsout), 1)
+    torch.cat(Xout, out=XXout)
+    torch.cat(Xlabelsout, out=XXlabelsout)
+    return torch.flatten(XXout, 1), XXlabelsout
 
 def sample_MNIST_projected(X,Xlabels,N,random=False):
     indices = np.arange(len(Xlabels))

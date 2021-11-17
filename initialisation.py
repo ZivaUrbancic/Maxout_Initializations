@@ -42,7 +42,9 @@ def marginal_median(Y):
 
 
 # copied from https://stackoverflow.com/questions/30299267/geometric-median-of-multidimensional-points
-def geometric_median(X, eps=1e-5):
+def geometric_median(Xin, eps=1e-5):
+
+    X = np.array(Xin)
     y = np.mean(X, 0)
 
     while True:
@@ -58,7 +60,7 @@ def geometric_median(X, eps=1e-5):
         if num_zeros == 0:
             y1 = T
         elif num_zeros == len(X):
-            return y
+            return torch.tensor(y)
         else:
             R = (T - y) * Dinvs
             r = np.linalg.norm(R)
@@ -66,12 +68,12 @@ def geometric_median(X, eps=1e-5):
             y1 = max(0, 1-rinv)*T + min(1, rinv)*y
 
         if euclidean(y, y1) < eps:
-            return y1
+            return torch.tensor(y1)
         y = y1
 
 
         
-def hyperplane_through_points(Y):
+def hyperplane_through_points(Yin):
     '''
     Find a hyperplane which goes through a collection of up to
     n points Y in R^n.
@@ -88,23 +90,31 @@ def hyperplane_through_points(Y):
 
     '''
     
-    Y = np.array(Y)
-    #print(Y.shape)
+    Y = np.array([np.array(vector) for vector in Yin])
+
     
     assert Y.shape[1] >= Y.shape[0], 'More data points than dimensions'
     
     d = Y.shape[0]
     matrix = np.concatenate((Y, np.ones((d,1))), axis = 1)
     
-    return null_space(matrix).transpose()[0]
+    null = null_space(matrix)
+    random_vector = np.random.randn(null.shape[1])
+    
+    return np.matmul(null, random_vector) + 0.0001*np.random.randn(null.shape[0])
 
 
 
 def initialise_region_matrix(N):
-    #R = np.concatenate((np.zeros((N,m), dtype=int),
-    #                np.arange(N).reshape(-1,1)),
-    #               axis = 1)
+    
     return np.arange(N).reshape(-1,1)
+
+def initialise_costs_vector(N):
+    
+    costs = -np.ones(N)
+    costs[0] = 1
+    
+    return costs
 
 
 
@@ -192,204 +202,229 @@ def regions(X, functions):
     return reg
 
 
-
-def update_region_matrix(X, R, functions):
+def vector_variance(Y):
     
-    sorted_X = X[R[:,-1]]
-    regs = regions(sorted_X, functions)
-    r = R.copy()
-    #print(r[:,-1])
-    indices=R[:, -1].reshape(-1,1)
-    #print(indices)
-    r[:,-1] = regs
-    r = np.concatenate((r, indices), axis=1)
-    sorted_indices = np.lexsort(np.rot90(r))
-
-    return r[sorted_indices]
-
-
-
-
-def find_ordered_region_indices(R):
-    '''
-    Group together the data in X by region, and return a sorted list of
-    regions, each described by a list of the indices of the points inside it.
-    Regions are sorted largest to smallest, so return[:k] are the k largest.
-
-    Parameters
-    ----------
-    R : Array
-        Regions matrix.
-
-    Returns
-    -------
-    List
-        DESCRIPTION.
-
-    '''
+    mean = np.mean(Y, axis = 0)
+    differences = Y - mean
+    var = np.sum(differences**2)/Y.shape[0]
     
-    # Initialise lists of elements of each group and the size of each group.
-    region_groups = [[R[0,-1]]]
-    region_sizes = [1]
+    return var
+
+def L2_region_cost(indices, Y):
+    # indices of a region
+    # Y is the whole label distribution
     
-    # Add a data point to the current group if it shares the same region
-    # signature as the previous point, and create a new group if not. We
-    # count sizes as we go.
+    region_labels = np.array(Y[indices])
+    N = len(indices)
+    
+    return N*vector_variance(region_labels)
+
+def regions_from_costs(costs):
+    
+    region_start_points = []
+    for n, c in enumerate(costs):
+        if c >= 0:
+            region_start_points += [n]
+    region_start_points += [-1]
+    
+    return [[region_start_points[i],
+             region_start_points[i+1]]
+            for i in range(len(region_start_points) - 1)]
+
+def regions_from_matrix(R):
+    
+    region_start_points = [0]
     current_region_signature = R[0,:-1]
-    for n in range(1,N):
-        if np.array_equal(R[n,:-1], current_region_signature):
-            region_groups[-1] += [R[n,-1]]
-            region_sizes[-1] += 1
-        else:
-            region_groups += [[R[n,-1]]]
-            region_sizes += [1]
+    
+    for n in range(1,R.shape[0]):
+        if not np.array_equal(R[n,:-1], current_region_signature):
+            region_start_points += [n]
             current_region_signature = R[n,:-1]
+    region_start_points += [-1]
     
-    # Sort region indices by size (and reverse to sort largest -> smallest)
-    sorted_region_indices = np.argsort(region_sizes)[::-1]
+    return [[region_start_points[i],
+             region_start_points[i+1]]
+            for i in range(len(region_start_points) - 1)]
+
+def update_regions_and_costs(R, C, functions, X, Y, region_cost):
+
+    sorted_X = X[R[:,-1]]
+    regs = np.array(regions(sorted_X, functions)).reshape(-1,1)
+    
+    #print(r[:,-1])
+    indices = R[:, -1].reshape(-1,1)
+    
+    before_regions = regions_from_costs(C)
+    
+    R = np.concatenate((R[:,:-1],
+                        regs,
+                        indices),
+                       axis=1)
+    sorted_row_indices = np.lexsort(np.rot90(R))
+    R = R[sorted_row_indices]
+    C = C[sorted_row_indices]
+    
+    after_regions = regions_from_matrix(R)
+    #print(after_regions)
+    
+    i = 0
+    for region in after_regions:
+
+        if not region == before_regions[i]:
+            if region[1] == -1:
+                data_indices = R[region[0]:, -1]
+            else:
+                data_indices = R[region[0] : region[1], -1]
+            #print(data_indices)
+            C[region[0]] = region_cost(data_indices, Y)
+            
+        if region[1] == before_regions[i][1]:
+            i += 1
+
+    return R, C
+
+# def find_ordered_region_indices(R):
+#     '''
+#     Group together the data in X by region, and return a sorted list of
+#     regions, each described by a list of the indices of the points inside it.
+#     Regions are sorted largest to smallest, so return[:k] are the k largest.
+
+#     Parameters
+#     ----------
+#     R : Array
+#         Regions matrix.
+
+#     Returns
+#     -------
+#     List
+#         DESCRIPTION.
+
+#     '''
+    
+#     # Initialise lists of elements of each group and the size of each group.
+#     region_groups = [[R[0,-1]]]
+#     region_sizes = [1]
+    
+#     # Add a data point to the current group if it shares the same region
+#     # signature as the previous point, and create a new group if not. We
+#     # count sizes as we go.
+#     current_region_signature = R[0,:-1]
+#     for n in range(1,R.shape[0]):
+#         if np.array_equal(R[n,:-1], current_region_signature):
+#             region_groups[-1] += [R[n,-1]]
+#             region_sizes[-1] += 1
+#         else:
+#             region_groups += [[R[n,-1]]]
+#             region_sizes += [1]
+#             current_region_signature = R[n,:-1]
+    
+#     # Sort region indices by size (and reverse to sort largest -> smallest)
+#     sorted_region_indices = np.argsort(region_sizes)[::-1]
     
     
-    return [region_groups[i] for i in sorted_region_indices]
+#     return [region_groups[i] for i in sorted_region_indices]
 
 
-
-def top_k_median_points(ordered_indices, X,
-                        k = -1,
-                        marginal = False):
-    '''
-    Compute the medians of the largest k regions as given by ordered_indices.
-
-    Parameters
-    ----------
-    ordered_indices : List
-        List of lists of indices, ordered by group size.
-    X : Array
-        Data set.
-    k : Int
-        Number of regions whose medians will be computed.
-
-    Returns
-    -------
-    medians : List
-        List of medians of the k largest regions.
-
-    '''
+def hyperplane_through_largest_regions(X, R, C,
+                               marginal = False):
     
-    if k == -1:
-        k = X.shape()[1]
-
+    regions = regions_from_costs(C)
+    costs = C[[pair[0] for pair in regions]]
+    #print(costs)
+    
+    sorted_region_indices = np.argsort(costs)[::-1]
+    #print(sorted_region_indices)
+    
+    k = min(X.shape[1], len(sorted_region_indices))
+    
     medians = []
-
+    
     for i in range(k):
-        indices = ordered_indices[i]
-        data = X[indices]
-        #print(data, marginal_median(data), '\n\n\n')
+        matrix_indices = regions[sorted_region_indices[i]]
+        if matrix_indices[0] == R.shape[0] - 1:
+            data_indices = [R[-1, -1]]
+        else:
+            data_indices = R[matrix_indices[0] : matrix_indices[1], -1]
+        data = X[data_indices]
         if marginal:
             medians += [marginal_median(data)]
         else:
             medians += [geometric_median(data)]
     
-    return medians
+    return hyperplane_through_points(medians)
 
 
+# def initialise_layer(X, Y, R, m):
+#     '''
+#     Initializes a neural network layer.
 
-def hyperplane_through_medians(ordered_indices, X,
-                               marginal = False):
-    '''
-    Create hyperplane through the medians of the largest regions
-    (as many as possible).
+#     Parameters
+#     ----------
+#     ordered_indices : List
+#         List of indices.
+#     X : Array
+#         Data set.
+#     R : Array
+#         Region matrix.
+#     m : Int
+#         Width of next layer
 
-    Parameters
-    ----------
-    ordered_indices : List
-        List of indices.
-    X : Array
-        Data set.
-
-    Returns
-    -------
-    Array
-        Normal vector to the hyperplane in R^{d+1}.
-     
-    '''
-    
-    k = min(X.shape[1], len(ordered_indices))
-    points = top_k_median_points(ordered_indices, X, k, marginal)
-    
-    #points_plot = np.array(points)
-    #ax.scatter(points_plot[:,0], points_plot[:,1], c = 'r')
-    
-    return hyperplane_through_points(points)
-
-
-
-
-def initialise_layer(X, R, m):
-    '''
-    Initializes a neural network layer.
-
-    Parameters
-    ----------
-    ordered_indices : List
-        List of indices.
-    X : Array
-        Data set.
-    R : Array
-        Region matrix.
-    m : Int
-        Width of next layer
-
-    Returns
-    -------
-    Array
-        A neural network layer initialized with the weights and biases computed
-        with scripts before.
-    '''
-    n = X.shape[1]
-    f=nn.Linear(n, m)
-    W=[]
-    for k in range(m):
-            indices = find_ordered_region_indices(R)
-            w = hyperplane_through_medians(indices, X)
-            R = update_region_matrix(X, R, [linear(w),zero])
-            W += [w]
-    W = np.array(W)
-    Weights = W[:,:-1]
-    Biases = W[:,-1]
-    with torch.no_grad():
-        f.weight = nn.Parameter(torch.tensor(Weights,dtype=torch.float32))
-        f.bias = nn.Parameter(torch.tensor(Biases,dtype=torch.float32))
-    print(W)
-    print(torch.tensor(Biases, dtype=torch.float64))
-    return f
+#     Returns
+#     -------
+#     Array
+#         A neural network layer initialized with the weights and biases computed
+#         with scripts before.
+#     '''
+#     n = X.shape[1]
+#     f=nn.Linear(n, m)
+#     W=[]
+#     for k in range(m):
+#         w = hyperplane_through_largest_regions(X, R)
+#         update_region_matrix(R, [linear(w),zero], X, Y, L2_region_cost)
+#         W += [w]
+#     W = np.array(W)
+#     Weights = W[:,:-1]
+#     Biases = W[:,-1]
+#     with torch.no_grad():
+#         f.weight = nn.Parameter(torch.tensor(Weights,dtype=torch.float32))
+#         f.bias = nn.Parameter(torch.tensor(Biases,dtype=torch.float32))
+#     #print(W)
+#     #print(torch.tensor(Biases, dtype=torch.float64))
+#     return f
 
 
 
 def fix_variance(weights, biases):
     m, n = weights.shape
-    scale_factor = np.sqrt(2/n) / np.std(weights)
+    scale_factor = (2/n)**0.5 / torch.std(weights)
     return scale_factor*weights, scale_factor*biases
     
 
 
 
-def initialise_ReLU_network(model,X):
+def initialise_ReLU_network(model, X, Y):
     Layers = [layer for layer in model.children()]
-    R = initialise_region_matrix(X.shape[0])
+    N = X.shape[0]
+    R = initialise_region_matrix(N)
+    C = initialise_costs_vector(N)
+    l = 0
     for layer in Layers:
+        l += 1
         W=[]
-        for k in range(layer.in_features):
-                indices = find_ordered_region_indices(R)
-                w = hyperplane_through_medians(indices, X)
-                R = update_region_matrix(X, R, [linear(w),zero])
-                W += [w]
-        W = np.array(W)
+        for k in range(layer.out_features):
+            w = hyperplane_through_largest_regions(X, R, C)
+            R, C = update_regions_and_costs(R, C, [linear(w),zero], X, Y, L2_region_cost)
+            W += [w]
+        W = torch.tensor(W, dtype = torch.float32)
         Weights = W[:,:-1]
         Biases = W[:,-1]
         Weights, Biases = fix_variance(Weights,Biases)
-        layer.weight = Weights
-        layer.bias = Biases
-        X = layer(X)
+        layer.weight = nn.Parameter(Weights)
+        layer.bias = nn.Parameter(Biases)
+        with torch.no_grad():
+            X = layer(X)
+        break
+    
         
 # =============================================================================
 #         with torch.no_grad():
