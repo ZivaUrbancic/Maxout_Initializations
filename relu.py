@@ -66,9 +66,9 @@ output_normalisation = nn.LogSoftmax()
 class ReLUNet(nn.Module):
     def __init__(self):
         super(ReLUNet, self).__init__()
-        self.layer1 = nn.Linear(28*28, 32)
-        self.layer2 = nn.Linear(32, 16)
-        self.layer3 = nn.Linear(16, 10)
+        self.layer1 = nn.Linear(28*28, 14)
+        self.layer2 = nn.Linear(14, 12)
+        self.layer3 = nn.Linear(12, 10)
 
 
     def forward(self, x):
@@ -78,13 +78,16 @@ class ReLUNet(nn.Module):
         x = output_normalisation(self.layer3(x))
         return x
 
-X, X_labels = sample_MNIST(train_dataset, 2)
+#X, X_labels = sample_MNIST(train_dataset, 2)
+Xall = torch.flatten(train_dataset.data,1)
+Yall = train_dataset.targets
 
 unit_vecs = np.eye(10)
 R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
 
 model = ReLUNet().to(device)
-#initialise_ReLU_network(model, X, R10_labels)
+# reinitialise_ReLU_network(model, X, R10_labels)
+reinitialise_ReLU_network(model,Xall,Yall)
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
@@ -137,4 +140,3 @@ with torch.no_grad():
     for i in range(10):
         acc = 100.0 * n_class_correct[i] / n_class_samples[i]
         print(f'Accuracy of {classes[i]}: {acc} %')
-
