@@ -30,13 +30,13 @@ def marginal_median(Y):
         Component-wise median point in R^n.
 
     '''
-    
+
     d= Y.shape[1]
     point = []
-    
+
     for n in range(d):
         point += [np.median(Y[:,n])]
-        
+
     return np.array(point)
 
 
@@ -72,7 +72,7 @@ def geometric_median(Xin, eps=1e-5):
         y = y1
 
 
-        
+
 def hyperplane_through_points(Yin):
     '''
     Find a hyperplane which goes through a collection of up to
@@ -89,31 +89,31 @@ def hyperplane_through_points(Yin):
         DESCRIPTION.
 
     '''
-    
+
     Y = np.array([np.array(vector) for vector in Yin])
 
-    
+
     assert Y.shape[1] >= Y.shape[0], 'More data points than dimensions'
-    
+
     d = Y.shape[0]
     matrix = np.concatenate((Y, np.ones((d,1))), axis = 1)
-    
+
     null = null_space(matrix)
     random_vector = np.random.randn(null.shape[1])
-    
+
     return np.matmul(null, random_vector) + 0.0001*np.random.randn(null.shape[0])
 
 
 
 def initialise_region_matrix(N):
-    
+
     return np.arange(N).reshape(-1,1)
 
 def initialise_costs_vector(N):
-    
+
     costs = -np.ones(N)
     costs[0] = 1
-    
+
     return costs
 
 
@@ -192,56 +192,56 @@ def regions(X, functions):
     '''
 
     reg = []
-    
+
     for x in X:
         vals = []
         for function in functions:
             vals += [function(x)]
         reg += [np.argmax(vals)]
-    
+
     return reg
 
 
 def vector_variance(Y):
-    
+
     mean = np.mean(Y, axis = 0)
     differences = Y - mean
     var = np.sum(differences**2)/Y.shape[0]
-    
+
     return var
 
 def L2_region_cost(indices, Y):
     # indices of a region
     # Y is the whole label distribution
-    
+
     region_labels = np.array(Y[indices])
     N = len(indices)
-    
+
     return N*vector_variance(region_labels)
 
 def regions_from_costs(costs):
-    
+
     region_start_points = []
     for n, c in enumerate(costs):
         if c >= 0:
             region_start_points += [n]
     region_start_points += [-1]
-    
+
     return [[region_start_points[i],
              region_start_points[i+1]]
             for i in range(len(region_start_points) - 1)]
 
 def regions_from_matrix(R):
-    
+
     region_start_points = [0]
     current_region_signature = R[0,:-1]
-    
+
     for n in range(1,R.shape[0]):
         if not np.array_equal(R[n,:-1], current_region_signature):
             region_start_points += [n]
             current_region_signature = R[n,:-1]
     region_start_points += [-1]
-    
+
     return [[region_start_points[i],
              region_start_points[i+1]]
             for i in range(len(region_start_points) - 1)]
@@ -250,12 +250,12 @@ def update_regions_and_costs(R, C, functions, X, Y, region_cost):
 
     sorted_X = X[R[:,-1]]
     regs = np.array(regions(sorted_X, functions)).reshape(-1,1)
-    
+
     #print(r[:,-1])
     indices = R[:, -1].reshape(-1,1)
-    
+
     before_regions = regions_from_costs(C)
-    
+
     R = np.concatenate((R[:,:-1],
                         regs,
                         indices),
@@ -263,10 +263,10 @@ def update_regions_and_costs(R, C, functions, X, Y, region_cost):
     sorted_row_indices = np.lexsort(np.rot90(R))
     R = R[sorted_row_indices]
     C = C[sorted_row_indices]
-    
+
     after_regions = regions_from_matrix(R)
     #print(after_regions)
-    
+
     i = 0
     for region in after_regions:
 
@@ -277,7 +277,7 @@ def update_regions_and_costs(R, C, functions, X, Y, region_cost):
                 data_indices = R[region[0] : region[1], -1]
             #print(data_indices)
             C[region[0]] = region_cost(data_indices, Y)
-            
+
         if region[1] == before_regions[i][1]:
             i += 1
 
@@ -300,11 +300,11 @@ def update_regions_and_costs(R, C, functions, X, Y, region_cost):
 #         DESCRIPTION.
 
 #     '''
-    
+
 #     # Initialise lists of elements of each group and the size of each group.
 #     region_groups = [[R[0,-1]]]
 #     region_sizes = [1]
-    
+
 #     # Add a data point to the current group if it shares the same region
 #     # signature as the previous point, and create a new group if not. We
 #     # count sizes as we go.
@@ -317,28 +317,28 @@ def update_regions_and_costs(R, C, functions, X, Y, region_cost):
 #             region_groups += [[R[n,-1]]]
 #             region_sizes += [1]
 #             current_region_signature = R[n,:-1]
-    
+
 #     # Sort region indices by size (and reverse to sort largest -> smallest)
 #     sorted_region_indices = np.argsort(region_sizes)[::-1]
-    
-    
+
+
 #     return [region_groups[i] for i in sorted_region_indices]
 
 
 def hyperplane_through_largest_regions(X, R, C,
                                marginal = False):
-    
+
     regions = regions_from_costs(C)
     costs = C[[pair[0] for pair in regions]]
     #print(costs)
-    
+
     sorted_region_indices = np.argsort(costs)[::-1]
     #print(sorted_region_indices)
-    
+
     k = min(X.shape[1], len(sorted_region_indices))
-    
+
     medians = []
-    
+
     for i in range(k):
         matrix_indices = regions[sorted_region_indices[i]]
         if matrix_indices[0] == R.shape[0] - 1:
@@ -350,7 +350,7 @@ def hyperplane_through_largest_regions(X, R, C,
             medians += [marginal_median(data)]
         else:
             medians += [geometric_median(data)]
-    
+
     return hyperplane_through_points(medians)
 
 
@@ -398,11 +398,11 @@ def fix_variance(weights, biases):
     m, n = weights.shape
     scale_factor = (2/n)**0.5 / torch.std(weights)
     return scale_factor*weights, scale_factor*biases
-    
 
 
 
-def initialise_ReLU_network(model, X, Y):
+
+def reinitialise_ReLU_network(model, X, Y):
     Layers = [layer for layer in model.children()]
     N = X.shape[0]
     R = initialise_region_matrix(N)
@@ -412,6 +412,7 @@ def initialise_ReLU_network(model, X, Y):
         l += 1
         W=[]
         for k in range(layer.out_features):
+            print("reinitialising layer ",l," unit ",k)
             w = hyperplane_through_largest_regions(X, R, C)
             R, C = update_regions_and_costs(R, C, [linear(w),zero], X, Y, L2_region_cost)
             W += [w]
@@ -424,11 +425,10 @@ def initialise_ReLU_network(model, X, Y):
         with torch.no_grad():
             X = layer(X)
         break
-    
-        
+
+
 # =============================================================================
 #         with torch.no_grad():
 #             f.weight = nn.Parameter(torch.tensor(Weights,dtype=torch.float32))
 #             f.bias = nn.Parameter(torch.tensor(Biases,dtype=torch.float32))
 # =============================================================================
-        
