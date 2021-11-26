@@ -6,6 +6,7 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import cProfile
 
 
 exec(open("mnist.py").read())
@@ -86,17 +87,22 @@ R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
 
 model = ReLUNet().to(device)
 
+# # For experiments:
 # start_time = time.time()
 # reinitialise_ReLU_network(model, X, R10_labels)
 # print("--- %s seconds ---" % (time.time() - start_time))
 
-T = [];
-for t in range(10):
-    start_time = time.time()
-    reinitialise_ReLU_network(model, X, R10_labels)
-    T += [time.time() - start_time]
-    print("--- %s seconds ---" % T[t])
-np.mean(np.array(T))
+# # For timing:
+# T = [];
+# for t in range(10):
+#     start_time = time.time()
+#     reinitialise_ReLU_network(model, X, R10_labels)
+#     T += [time.time() - start_time]
+#     print("--- %s seconds ---" % T[t])
+# print(np.mean(np.array(T)))
+
+# For profiling:
+reinitialise_ReLU_network(model, X, R10_labels)
 
 # criterion = nn.CrossEntropyLoss()
 # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
