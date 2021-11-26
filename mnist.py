@@ -52,7 +52,7 @@ def sample_MNIST(train_dataset,N,random=False):
     XXlabelsout = torch.Tensor(len(Xlabelsout), 1)
     torch.cat(Xout, out=XXout)
     torch.cat(Xlabelsout, out=XXlabelsout)
-    return torch.flatten(XXout, 1), XXlabelsout
+    return np.array(torch.flatten(XXout, 1)), XXlabelsout
 
 def sample_MNIST_projected(X,Xlabels,N,random=False):
     indices = np.arange(len(Xlabels))

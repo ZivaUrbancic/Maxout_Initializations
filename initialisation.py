@@ -42,9 +42,8 @@ def marginal_median(Y):
 
 
 # copied from https://stackoverflow.com/questions/30299267/geometric-median-of-multidimensional-points
-def geometric_median(Xin, eps=1e-5):
+def geometric_median(X, eps=1e-5):
 
-    X = np.array(Xin)
     y = np.mean(X, 0)
 
     while True:
@@ -60,7 +59,7 @@ def geometric_median(Xin, eps=1e-5):
         if num_zeros == 0:
             y1 = T
         elif num_zeros == len(X):
-            return torch.tensor(y)
+            return y
         else:
             R = (T - y) * Dinvs
             r = np.linalg.norm(R)
@@ -68,7 +67,7 @@ def geometric_median(Xin, eps=1e-5):
             y1 = max(0, 1-rinv)*T + min(1, rinv)*y
 
         if euclidean(y, y1) < eps:
-            return torch.tensor(y1)
+            return y1
         y = y1
 
 
@@ -396,7 +395,7 @@ def hyperplane_through_largest_regions(X, R, C,
 
 def fix_variance(weights, biases):
     m, n = weights.shape
-    scale_factor = (2/n)**0.5 / torch.std(weights)
+    scale_factor = (2/n)**0.5 / np.std(weights)
     return scale_factor*weights, scale_factor*biases
 
 
@@ -416,14 +415,16 @@ def reinitialise_ReLU_network(model, X, Y):
             w = hyperplane_through_largest_regions(X, R, C)
             R, C = update_regions_and_costs(R, C, [linear(w),zero], X, Y, L2_region_cost)
             W += [w]
-        W = torch.tensor(W, dtype = torch.float32)
+        W = np.array(W)
         Weights = W[:,:-1]
         Biases = W[:,-1]
         Weights, Biases = fix_variance(Weights,Biases)
+        Weights = torch.tensor(Weights, dtype = torch.float32)
+        Biases = torch.tensor(Biases, dtype = torch.float32)
         layer.weight = nn.Parameter(Weights)
         layer.bias = nn.Parameter(Biases)
         with torch.no_grad():
-            X = layer(X)
+            X = np.array(layer(torch.tensor(X)))
         break
 
 
