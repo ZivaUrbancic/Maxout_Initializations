@@ -464,10 +464,7 @@ def maxout_activation(weights_and_biases):
 def fix_variance(X, weights, biases):
     Xvar = np.var(X, axis=0)
     scale_factor = np.reciprocal(np.sqrt(Xvar))
-    print(scale_factor.shape)
-    print(weights.shape)
     weights = weights * scale_factor.reshape(len(scale_factor), 1) #np.matmul(np.diag(scale_factor), weights)
-    print(weights.shape)
     biases = np.multiply(scale_factor, biases)
     return weights, biases
 
@@ -500,12 +497,12 @@ def reinitialise_ReLU_network(model, X, Y):
         reinitialise_unit = True
         for k in range(layer.out_features):
             if reinitialise_unit:
-                print("reinitialising layer ",l," unit ",k)
+                #print("reinitialising layer ",l," unit ",k)
                 w = hyperplanes_through_largest_region(X, R, C, maxout=None)
                 w = w[1]
                 R, C = update_regions_and_costs(R, C, [linear(w),zero], X, Y, L2_region_cost)
                 W += [w]
-                reinitialise_unit = stopping_condition(C, layer.in_features)
+                reinitialise_unit = stopping_condition(C, 0)#layer.in_features)
             else:
                 w = layer.weight[:,k]
                 w = w.detach().numpy()
@@ -525,14 +522,8 @@ def reinitialise_ReLU_network(model, X, Y):
         with torch.no_grad():
             Xtemp = np.array(layer(torch.tensor(X)))
         
-        #print("BEFORE: \n")
-        #print("weights: ", Weights, ", weights shape: ", Weights.shape, "\n")
-        #print("biases: ", Biases, ", biases shape: ", Biases.shape, "\n")
         # Fix the weights and biases to prevent imploding and exploding activations:
         Weights, Biases = fix_variance(Xtemp, Weights, Biases)
-        #print("AFTER: \n")
-        #print("weights: ", Weights, ", weights shape: ", Weights.shape, "\n")
-        #print("biases: ", Biases, ", biases shape: ", Biases.shape, "\n")
         layer.weight = nn.Parameter(Weights)
         layer.bias = nn.Parameter(Biases)
         with torch.no_grad():
@@ -540,7 +531,7 @@ def reinitialise_ReLU_network(model, X, Y):
             
         # Abort reinitialisation if necessary:
         if not reinitialise_unit:
-            print("Stopping reinitialisation due to lack of large regions.")
+            #print("Stopping reinitialisation due to lack of large regions.")
             break
 
 

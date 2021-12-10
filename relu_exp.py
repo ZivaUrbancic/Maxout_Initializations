@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Dec 10 10:49:17 2021
+
+@author: ziva
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -76,83 +84,71 @@ class ReLUNet(nn.Module):
     def forward(self, x):
         x = x.view(x.size(0), -1) # I do not understand this black magic, x is not a single image, but a tensor of images. How does this code work?
         x = activation(self.layer1(x))
-        x# = activation(self.layer2(x))
+        #x = activation(self.layer2(x))
         x = output_normalisation(self.layer3(x))
         return x
 
-X, X_labels = sample_MNIST(train_dataset, 3000)
+def initialise_and_train():
+    model = ReLUNet().to(device)
+    
+    X, X_labels = sample_MNIST(train_dataset, 3000)
+    unit_vecs = np.eye(10)
+    R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
+    
+    reinitialise_ReLU_network(model, X, R10_labels)
+    
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    loss_out = []
+    accuracy_out = []
+    
+    #n_total_steps = len(train_loader)
+    for epoch in range(num_epochs):
+        for i, (images, labels) in enumerate(train_loader):
+            images, labels = images.to(device), labels.to(device)
 
-unit_vecs = np.eye(10)
-R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
+            # Forward pass
+            outputs = model(images)
+            loss = criterion(outputs, labels)
 
-model = ReLUNet().to(device)
+            # Backward and optimize
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+             
+            if (i+1) % 200 == 0:
+                loss_out += [loss.item()]
+                #print (f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
 
-# # For experiments:
-# start_time = time.time()
-# reinitialise_ReLU_network(model, X, R10_labels)
-# print("--- %s seconds ---" % (time.time() - start_time))
+    #print('Finished Training')
+    # PATH = './reluMNIST.pth'
+    # torch.save(model.state_dict(), PATH)
+    
+    with torch.no_grad():
+        n_correct = 0
+        n_samples = 0
+        n_class_correct = [0 for i in range(10)]
+        n_class_samples = [0 for i in range(10)]
+        for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+            outputs = model(images)
+            # max returns (value ,index)
+            _, predicted = torch.max(outputs, 1)
+            n_samples += labels.size(0)
+            n_correct += (predicted == labels).sum().item()
+            for i in range(labels.size(0)):
+                label = labels[i]
+                pred = predicted[i]
+                if (label == pred):
+                    n_class_correct[label] += 1
+                n_class_samples[label] += 1
+                    
+        accuracy_out += [n_correct / n_samples]
+        for i in range(10):
+            accuracy_out += [n_class_correct[i] / n_class_samples[i]]
+                        
+    return loss_out, accuracy_out
 
-# # For timing:
-# T = [];
-# for t in range(10):
-#     start_time = time.time()
-#     reinitialise_ReLU_network(model, X, R10_labels)
-#     T += [time.time() - start_time]
-#     print("--- %s seconds ---" % T[t])
-# print(np.mean(np.array(T)))
-
-# For profiling:
-reinitialise_ReLU_network(model, X, R10_labels)
-
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-
-n_total_steps = len(train_loader)
-for epoch in range(num_epochs):
-    for i, (images, labels) in enumerate(train_loader):
-        images, labels = images.to(device), labels.to(device)
-
-         # Forward pass
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-
-         # Backward and optimize
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if (i+1) % 200 == 0:
-            print (f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
-
-print('Finished Training')
-# PATH = './reluMNIST.pth'
-# torch.save(model.state_dict(), PATH)
-
-with torch.no_grad():
-    n_correct = 0
-    n_samples = 0
-    n_class_correct = [0 for i in range(10)]
-    n_class_samples = [0 for i in range(10)]
-    for images, labels in test_loader:
-        images = images.to(device)
-        labels = labels.to(device)
-        outputs = model(images)
-        # max returns (value ,index)
-        _, predicted = torch.max(outputs, 1)
-        n_samples += labels.size(0)
-        n_correct += (predicted == labels).sum().item()
-        for i in range(labels.size(0)):
-            label = labels[i]
-            pred = predicted[i]
-            if (label == pred):
-                n_class_correct[label] += 1
-            n_class_samples[label] += 1
-
-    acc = 100.0 * n_correct / n_samples
-    print(f'Accuracy of the network: {acc} %')
-    for i in range(10):
-        acc = 100.0 * n_class_correct[i] / n_class_samples[i]
-        print(f'Accuracy of {classes[i]}: {acc} %')
-
-
-
+print(initialise_and_train())
+    
