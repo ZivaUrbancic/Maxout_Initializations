@@ -353,6 +353,68 @@ def hyperplane_through_largest_regions(X, R, C,
     return hyperplane_through_points(medians)
 
 
+
+def hyperplanes_through_largest_region(X, R, C, 
+                                      maxout = None):
+
+    regions = regions_from_costs(C)
+    costs = C[[pair[0] for pair in regions]]
+    #print(costs)
+
+    sorted_region_indices = np.argsort(costs)[::-1]
+
+    matrix_indices = regions[sorted_region_indices[0]]
+    if matrix_indices[0] == R.shape[0] - 1:
+        data_indices = [R[-1, -1]]
+    else:
+        data_indices = R[matrix_indices[0] : matrix_indices[1], -1]
+    data = X[data_indices]
+
+    w = np.random.normal(size=X.shape[1])
+    #print("X.shape[1]: ", X.shape[1], ", type(w): ", type(w))
+    projections = calculate_projections(w, data)                  # calculate proj. of pts onto weight
+    projections = np.sort(projections)
+    splits = compute_splits(projections, maxout)       # calculate splits between batches
+    factors, biases = compute_factors_and_biases(splits, maxout)                   # calculate the biases   
+    factors = factors.reshape(len(factors),1)
+    w = w.reshape(1,len(w))
+    W = np.matmul(factors, w)
+    return np.concatenate((W, biases.reshape(len(biases), 1)), axis=1)
+        
+def compute_factors_and_biases(splits, maxout):
+    biases = np.zeros(len(splits)+1)
+    if maxout is None:
+        factors = np.array([0,1])
+        biases[1] = -splits[0]
+    else:
+        factors = np.linspace(-1, 1, len(splits)+1)
+        for i in range(len(factors)-1):
+            biases[i+1] = biases[i] + splits[i]*(factors[i]-factors[i+1])
+    return factors, biases
+
+def compute_splits(projections, maxout):
+    if maxout is None:
+        k = 2
+    else:
+        k = maxout
+    points_per_region = np.round(len(projections)/k).astype(int)
+    #print("Points per region: ", points_per_region)
+    splits = np.zeros(k-1)
+    for i in range (k-1):
+        splits[i]=1/2*(projections[(i+1)*points_per_region - 1] + projections[(i+1)*points_per_region])
+    return splits
+
+def calculate_projections(w, data):
+    data_size, b = data.shape 
+    c = 0
+    proj = np.zeros(data_size)
+    for x in data:
+        #print("x.type: ", type(x), ", w.type: ", type(w))
+        proj[c] = np.dot(x, w)
+        c= c+1
+    return proj
+
+
 # def initialise_layer(X, Y, R, m):
 #     '''
 #     Initializes a neural network layer.
@@ -390,13 +452,38 @@ def hyperplane_through_largest_regions(X, R, C,
 #     #print(W)
 #     #print(torch.tensor(Biases, dtype=torch.float64))
 #     return f
+    
+def maxout_activation(weights_and_biases):
+    functions = []
+    for i in range(weights_and_biases.shape[0]):
+        functions += [linear(weights_and_biases[i])]
+    return functions
 
 
 
-def fix_variance(weights, biases):
-    m, n = weights.shape
-    scale_factor = (2/n)**0.5 / np.std(weights)
-    return scale_factor*weights, scale_factor*biases
+def fix_variance(X, weights, biases):
+    Xvar = np.var(X, axis=0)
+    scale_factor = np.reciprocal(np.sqrt(Xvar))
+    print(scale_factor.shape)
+    print(weights.shape)
+    weights = weights * scale_factor.reshape(len(scale_factor), 1) #np.matmul(np.diag(scale_factor), weights)
+    print(weights.shape)
+    biases = np.multiply(scale_factor, biases)
+    return weights, biases
+
+
+
+
+def stopping_condition(C, k):
+    i=0
+    last = 0
+    for c in C:
+        if c != -1:
+            i += 1
+            last = c
+            if i == k:
+                break
+    return last>0
 
 
 
@@ -410,22 +497,51 @@ def reinitialise_ReLU_network(model, X, Y):
     for layer in Layers:
         l += 1
         W=[]
+        reinitialise_unit = True
         for k in range(layer.out_features):
-            print("reinitialising layer ",l," unit ",k)
-            w = hyperplane_through_largest_regions(X, R, C)
-            R, C = update_regions_and_costs(R, C, [linear(w),zero], X, Y, L2_region_cost)
-            W += [w]
+            if reinitialise_unit:
+                print("reinitialising layer ",l," unit ",k)
+                w = hyperplanes_through_largest_region(X, R, C, maxout=None)
+                w = w[1]
+                R, C = update_regions_and_costs(R, C, [linear(w),zero], X, Y, L2_region_cost)
+                W += [w]
+                reinitialise_unit = stopping_condition(C, layer.in_features)
+            else:
+                w = layer.weight[:,k]
+                w = w.detach().numpy()
+                b = layer.bias[k]
+                b = b.detach().numpy()
+                w = np.append(w, [b])
+                W += [w]
         W = np.array(W)
         Weights = W[:,:-1]
         Biases = W[:,-1]
-        Weights, Biases = fix_variance(Weights,Biases)
+        
+        # Compute the image of X:
         Weights = torch.tensor(Weights, dtype = torch.float32)
         Biases = torch.tensor(Biases, dtype = torch.float32)
         layer.weight = nn.Parameter(Weights)
         layer.bias = nn.Parameter(Biases)
         with torch.no_grad():
+            Xtemp = np.array(layer(torch.tensor(X)))
+        
+        #print("BEFORE: \n")
+        #print("weights: ", Weights, ", weights shape: ", Weights.shape, "\n")
+        #print("biases: ", Biases, ", biases shape: ", Biases.shape, "\n")
+        # Fix the weights and biases to prevent imploding and exploding activations:
+        Weights, Biases = fix_variance(Xtemp, Weights, Biases)
+        #print("AFTER: \n")
+        #print("weights: ", Weights, ", weights shape: ", Weights.shape, "\n")
+        #print("biases: ", Biases, ", biases shape: ", Biases.shape, "\n")
+        layer.weight = nn.Parameter(Weights)
+        layer.bias = nn.Parameter(Biases)
+        with torch.no_grad():
             X = np.array(layer(torch.tensor(X)))
-        break
+            
+        # Abort reinitialisation if necessary:
+        if not reinitialise_unit:
+            print("Stopping reinitialisation due to lack of large regions.")
+            break
 
 
 # =============================================================================
