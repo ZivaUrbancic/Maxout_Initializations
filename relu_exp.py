@@ -16,6 +16,7 @@ import numpy as np
 import time
 import cProfile
 
+from joblib import Parallel, delayed
 
 exec(open("mnist.py").read())
 exec(open("initialisation.py").read())
@@ -88,20 +89,22 @@ class ReLUNet(nn.Module):
         x = output_normalisation(self.layer3(x))
         return x
 
-def initialise_and_train():
+def initialise_and_train(exp_number):
+    print("running experiment ",exp_number,"...")
+
     model = ReLUNet().to(device)
-    
-    X, X_labels = sample_MNIST(train_dataset, 3000)
-    unit_vecs = np.eye(10)
-    R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
-    
-    reinitialise_ReLU_network(model, X, R10_labels)
-    
+
+    # X, X_labels = sample_MNIST(train_dataset, 3000)
+    # unit_vecs = np.eye(10)
+    # R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
+
+    # reinitialise_ReLU_network(model, X, R10_labels)
+
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     loss_out = []
     accuracy_out = []
-    
+
     #n_total_steps = len(train_loader)
     for epoch in range(num_epochs):
         for i, (images, labels) in enumerate(train_loader):
@@ -115,7 +118,7 @@ def initialise_and_train():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-             
+
             if (i+1) % 200 == 0:
                 loss_out += [loss.item()]
                 #print (f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
@@ -123,7 +126,7 @@ def initialise_and_train():
     #print('Finished Training')
     # PATH = './reluMNIST.pth'
     # torch.save(model.state_dict(), PATH)
-    
+
     with torch.no_grad():
         n_correct = 0
         n_samples = 0
@@ -143,12 +146,15 @@ def initialise_and_train():
                 if (label == pred):
                     n_class_correct[label] += 1
                 n_class_samples[label] += 1
-                    
+
         accuracy_out += [n_correct / n_samples]
         for i in range(10):
             accuracy_out += [n_class_correct[i] / n_class_samples[i]]
-                        
+
     return loss_out, accuracy_out
 
-print(initialise_and_train())
-    
+exp_out = Parallel(n_jobs=7)(delayed(initialise_and_train)(i) for i in range(100))
+
+f = open("relu_exp.out", "w")
+f.write(repr(exp_out))
+f.close()
