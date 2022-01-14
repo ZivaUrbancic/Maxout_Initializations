@@ -504,7 +504,11 @@ def reinitialise_ReLU_network(model, X, Y):
                 W += [w]
                 reinitialise_unit = stopping_condition(C, 0)#layer.in_features)
             else:
-                w = layer.weight[:,k]
+                w = layer.weight[k,:]
+                ###############################################################
+                # Above I switched k and :
+                ###############################################################
+                #print("layer.weight[:,k] ", w)
                 w = w.detach().numpy()
                 b = layer.bias[k]
                 b = b.detach().numpy()
