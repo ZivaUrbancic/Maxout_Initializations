@@ -472,15 +472,9 @@ def fix_variance(X, weights, biases):
 
 
 def stopping_condition(C, k):
-    i=0
-    last = 0
-    for c in C:
-        if c != -1:
-            i += 1
-            last = c
-            if i == k:
-                break
-    return last>0
+    costs = np.sort([c for c in C if c > -1])
+    # print("region cost:", costs[len(costs)-k-1])
+    return costs[len(costs)-k-1]>0
 
 
 
