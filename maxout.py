@@ -61,15 +61,12 @@ mySoftmax = torch.nn.Softmax(dim=0)
 class MaxoutNet(nn.Module):
     def __init__(self):
         super(MaxoutNet, self).__init__()
-        self.lay1lin1 = nn.Linear(28*28, 196)
-        self.lay1lin2 = nn.Linear(28*28, 196)
-        self.lay1lin3 = nn.Linear(28*28, 196)
-        self.lay2lin1 = nn.Linear(196, 49)
-        self.lay2lin2 = nn.Linear(196, 49)
-        self.lay2lin3 = nn.Linear(196, 49)
-        self.lay3lin1 = nn.Linear(49, 10)
-        self.lay3lin2 = nn.Linear(49, 10)
-        self.lay3lin3 = nn.Linear(49, 10)
+        self.lay1lin1 = nn.Linear(28*28, 128)
+        self.lay1lin2 = nn.Linear(28*28, 128)
+        self.lay1lin3 = nn.Linear(28*28, 128)
+        self.lay2lin1 = nn.Linear(128, 10)
+        self.lay2lin2 = nn.Linear(128, 10)
+        self.lay2lin3 = nn.Linear(128, 10)
 
 
     def forward(self, x):
@@ -88,14 +85,7 @@ class MaxoutNet(nn.Module):
         x,dummy = torch.max(X,0)
               # go through each column and compute max
               # size: 1 * width layer 2
-        x = x.unsqueeze(0)
-        X = torch.cat( (self.lay3lin1(x),self.lay3lin2(x),self.lay3lin3(x)), 0)
-              # concatenate output vectors into matrix (row-wise by default)
-              # size: rank * width layer 3
-        x,dummy = torch.max(X,0)
-              # go through each column and compute max
-              # size: 1 * width layer 3
-        # x = mySoftmax(x)
+        # x = mySoftmax(x) # wth does this make loss worse?
         return x
 
 model = MaxoutNet().to(device)
