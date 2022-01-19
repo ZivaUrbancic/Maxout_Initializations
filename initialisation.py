@@ -534,8 +534,61 @@ def reinitialise_ReLU_network(model, X, Y):
             break
 
 
-# =============================================================================
-#         with torch.no_grad():
-#             f.weight = nn.Parameter(torch.tensor(Weights,dtype=torch.float32))
-#             f.bias = nn.Parameter(torch.tensor(Biases,dtype=torch.float32))
-# =============================================================================
+
+
+def reinitialise_Maxout_network(model, X, Y):
+    Layers = [layer for layer in model.children()]
+    N = X.shape[0]
+    R = initialise_region_matrix(N)
+    C = initialise_costs_vector(N)
+    l = 0
+    maxout_rank = model.maxout_rank
+    for layer in Layers:
+        l += 1
+        W = [[]]*maxout_rank # list of matrices, one per rank
+        reinitialise_unit = True
+        for k in range(layer.out_features):
+            if reinitialise_unit:
+                print("reinitialising layer ",l," unit ",k)
+                w = hyperplanes_through_largest_region(X, R, C, maxout=maxout_rank)
+                R, C = update_regions_and_costs(R, C, [linear(wj) for wj in w], X, Y, L2_region_cost)
+
+                for Wj,wj in enumerate(W,w):
+                    Wj += [wj]
+
+                reinitialise_unit = stopping_condition(C, 0)#layer.in_features)
+            else:
+                print("keeping layer ",l," unit ",k)
+                w = layer.weight[k,:]
+                ###############################################################
+                # Above I switched k and :
+                ###############################################################
+                #print("layer.weight[:,k] ", w)
+                w = w.detach().numpy()
+                b = layer.bias[k]
+                b = b.detach().numpy()
+                w = np.append(w, [b])
+                W += [w]
+        W = np.array(W)
+        Weights = W[:,:-1]
+        Biases = W[:,-1]
+
+        # Compute the image of X:
+        Weights = torch.tensor(Weights, dtype = torch.float32)
+        Biases = torch.tensor(Biases, dtype = torch.float32)
+        layer.weight = nn.Parameter(Weights)
+        layer.bias = nn.Parameter(Biases)
+        with torch.no_grad():
+            Xtemp = np.array(layer(torch.tensor(X)))
+
+        # Fix the weights and biases to prevent imploding and exploding activations:
+        Weights, Biases = fix_variance(Xtemp, Weights, Biases)
+        layer.weight = nn.Parameter(Weights)
+        layer.bias = nn.Parameter(Biases)
+        with torch.no_grad():
+            X = np.array(layer(torch.tensor(X)))
+
+        # Abort reinitialisation if necessary:
+        if not reinitialise_unit:
+            #print("Stopping reinitialisation due to lack of large regions.")
+            break
