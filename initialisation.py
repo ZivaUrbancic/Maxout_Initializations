@@ -193,9 +193,9 @@ def regions(X, functions):
     reg = []
 
     for x in X:
-        vals = []
-        for function in functions:
-            vals += [function(x)]
+        vals = np.zeros(len(functions)); # making vals np.array to speed up np.argmax
+        for i,f in enumerate(functions):
+            vals[i] = f(x)
         reg += [np.argmax(vals)]
 
     return reg
@@ -354,7 +354,7 @@ def hyperplane_through_largest_regions(X, R, C,
 
 
 
-def hyperplanes_through_largest_region(X, R, C, 
+def hyperplanes_through_largest_region(X, R, C,
                                       maxout = None):
 
     regions = regions_from_costs(C)
@@ -375,12 +375,12 @@ def hyperplanes_through_largest_region(X, R, C,
     projections = calculate_projections(w, data)                  # calculate proj. of pts onto weight
     projections = np.sort(projections)
     splits = compute_splits(projections, maxout)       # calculate splits between batches
-    factors, biases = compute_factors_and_biases(splits, maxout)                   # calculate the biases   
+    factors, biases = compute_factors_and_biases(splits, maxout)                   # calculate the biases
     factors = factors.reshape(len(factors),1)
     w = w.reshape(1,len(w))
     W = np.matmul(factors, w)
     return np.concatenate((W, biases.reshape(len(biases), 1)), axis=1)
-        
+
 def compute_factors_and_biases(splits, maxout):
     biases = np.zeros(len(splits)+1)
     if maxout is None:
@@ -405,7 +405,7 @@ def compute_splits(projections, maxout):
     return splits
 
 def calculate_projections(w, data):
-    data_size, b = data.shape 
+    data_size, b = data.shape
     c = 0
     proj = np.zeros(data_size)
     for x in data:
@@ -452,7 +452,7 @@ def calculate_projections(w, data):
 #     #print(W)
 #     #print(torch.tensor(Biases, dtype=torch.float64))
 #     return f
-    
+
 def maxout_activation(weights_and_biases):
     functions = []
     for i in range(weights_and_biases.shape[0]):
@@ -491,13 +491,14 @@ def reinitialise_ReLU_network(model, X, Y):
         reinitialise_unit = True
         for k in range(layer.out_features):
             if reinitialise_unit:
-                #print("reinitialising layer ",l," unit ",k)
+                print("reinitialising layer ",l," unit ",k)
                 w = hyperplanes_through_largest_region(X, R, C, maxout=None)
                 w = w[1]
                 R, C = update_regions_and_costs(R, C, [linear(w),zero], X, Y, L2_region_cost)
                 W += [w]
                 reinitialise_unit = stopping_condition(C, 0)#layer.in_features)
             else:
+                print("keeping layer ",l," unit ",k)
                 w = layer.weight[k,:]
                 ###############################################################
                 # Above I switched k and :
@@ -511,7 +512,7 @@ def reinitialise_ReLU_network(model, X, Y):
         W = np.array(W)
         Weights = W[:,:-1]
         Biases = W[:,-1]
-        
+
         # Compute the image of X:
         Weights = torch.tensor(Weights, dtype = torch.float32)
         Biases = torch.tensor(Biases, dtype = torch.float32)
@@ -519,14 +520,14 @@ def reinitialise_ReLU_network(model, X, Y):
         layer.bias = nn.Parameter(Biases)
         with torch.no_grad():
             Xtemp = np.array(layer(torch.tensor(X)))
-        
+
         # Fix the weights and biases to prevent imploding and exploding activations:
         Weights, Biases = fix_variance(Xtemp, Weights, Biases)
         layer.weight = nn.Parameter(Weights)
         layer.bias = nn.Parameter(Biases)
         with torch.no_grad():
             X = np.array(layer(torch.tensor(X)))
-            
+
         # Abort reinitialisation if necessary:
         if not reinitialise_unit:
             #print("Stopping reinitialisation due to lack of large regions.")
