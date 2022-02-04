@@ -356,12 +356,12 @@ def hyperplane_through_largest_regions(X, R, C,
 
 def hyperplanes_through_largest_regions(X, R, C,
                                       maxout = None):
-    
+
     if maxout == None:
         rank = 2
     else:
         rank = maxout
-    
+
     regions = regions_from_costs(C)
     costs = C[[pair[0] for pair in regions]]
     #print(costs)
@@ -385,12 +385,12 @@ def hyperplanes_through_largest_regions(X, R, C,
         projections = calculate_projections(w, data)                  # calculate proj. of pts onto weight
         projections = np.sort(projections)
         splits += [compute_splits(projections, 2)]       # calculate splits between batches
-    
+
     factors, biases = compute_factors_and_biases(splits, maxout)
     factors = factors.reshape(len(factors), 1)
     w = w.reshape(1,len(w))
     W = np.matmul(factors, w)
-    
+
     return np.concatenate((W, biases.reshape(len(biases), 1)), axis=1)
 
 def compute_factors_and_biases(splits, maxout):
@@ -405,7 +405,7 @@ def compute_factors_and_biases(splits, maxout):
     return factors, biases
 
 def compute_splits(projections, maxout):
-    print(len(projections))
+    # print(len(projections))
     if maxout is None:
         k = 2
     else:
@@ -485,7 +485,7 @@ def fix_variance(X, weights, biases):
 
 
 def largest_regions_have_positive_cost(C, k):
-    
+
     costs = np.sort([c for c in C if c > -1])
     # print("region cost:", costs[len(costs)-k-1])
     return costs[len(costs) - k - 1] > 0
@@ -557,67 +557,65 @@ def reinitialise_Maxout_network(model, X, Y):
     C = initialise_costs_vector(N)
     maxout_rank = model.maxout_rank
     reinitialise_unit = True
-    
+
     mode = 0
-    
+
     for l in range(0, len(Sub_Layers), maxout_rank):
-        
-        W = [[]]*maxout_rank # list of matrices, one per rank
+
+        W = [[] for j in range(maxout_rank)] # list of matrices, one per rank
         Layer = [Sub_Layers[l+p] for p in range(maxout_rank)]
-        
+
         for k in range(0, Layer[0].out_features):
-            
+
             if mode == 0:
                 print("keeping layer ", l//maxout_rank, " unit ", k)
                 w = [sub_layer.weight[k,:].detach().numpy() for sub_layer in Layer]
                 b = [sub_layer.bias[k].detach().numpy() for sub_layer in Layer]
                 wb = [np.concatenate((w[j], [b[j]])) for j in range(len(w))]
-                
+
                 R, C = update_regions_and_costs(R, C,
                                                 [linear(wj) for wj in wb],
                                                 X, Y, L2_region_cost)
                 for j, Wj in enumerate(W):
                     Wj += [np.append(w[j], [b[j]])]
-                    
+
                 if largest_regions_have_positive_cost(C, maxout_rank - 2):
                     mode = 1
-            
+
             elif mode == 1:
                 print("reinitialising layer ", l//maxout_rank," unit ", k)
-                w = hyperplanes_through_largest_regions(X, R, C, 
+                w = hyperplanes_through_largest_regions(X, R, C,
                                                         maxout = maxout_rank)
                 R, C = update_regions_and_costs(R, C,
                                                 [linear(wj) for wj in w],
                                                 X, Y, L2_region_cost)
                 for j, Wj in enumerate(W):
                     Wj += [w[j]]
-                
+
                 if not largest_regions_have_positive_cost(C, maxout_rank - 2):
                     mode = 2
-                
+
             else:
                 print("keeping layer ", l//maxout_rank, " unit ", k)
                 w = [sub_layer.weight[k,:].detach().numpy() for sub_layer in Layer]
                 b = [sub_layer.bias[k].detach().numpy() for sub_layer in Layer]
                 for j, Wj in enumerate(W):
                     Wj += [np.append(w[j], [b[j]])]
-            print(np.array(W).shape)
-            
+
         W = np.array(W)
-        
+
         for j in range(maxout_rank):
             Weights = torch.tensor(W[j,:,:-1], dtype = torch.float32)
             Biases = torch.tensor(W[j,:,-1], dtype = torch.float32)
-            print(W.shape, Weights.shape, Biases.shape)
             Layer[j].weight = nn.Parameter(Weights)
             Layer[j].bias = nn.Parameter(Biases)
-        
+
         with torch.no_grad():
             sub_layer_images = [np.array(sub_layer(torch.tensor(X)))
                            for sub_layer in Layer]
             sub_layer_images = np.array(sub_layer_images)
             Xtemp = np.amax(sub_layer_images, axis = 0)
-        
+
         for j in range(maxout_rank):
             # Fix the weights and biases to prevent imploding and exploding activations:
             Weights = torch.tensor(W[j,:,:-1], dtype = torch.float32)
@@ -625,7 +623,7 @@ def reinitialise_Maxout_network(model, X, Y):
             Weights, Biases = fix_variance(Xtemp, Weights, Biases)
             Layer[j].weight = nn.Parameter(Weights)
             Layer[j].bias = nn.Parameter(Biases)
-        
+
         with torch.no_grad():
             sub_layer_images = [np.array(sub_layer(torch.tensor(X)))
                            for sub_layer in Layer]

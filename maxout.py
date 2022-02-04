@@ -99,56 +99,57 @@ X, X_labels = sample_MNIST(train_dataset, 3000)
 unit_vecs = np.eye(10)
 R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
 
-reinitialise_Maxout_network(model, X, R10_labels)
+# reinitialise_Maxout_network(model, X, R10_labels)
 
-# criterion = nn.CrossEntropyLoss()
-# optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
-# n_total_steps = len(train_loader)
-# for epoch in range(num_epochs):
-#     for i, (images, labels) in enumerate(train_loader):
-#         images, labels = images.to(device), labels.to(device)
+n_total_steps = len(train_loader)
+for epoch in range(num_epochs):
+    for i, (images, labels) in enumerate(train_loader):
+        print(i)
+        images, labels = images.to(device), labels.to(device)
 
-#         # Forward pass
-#         outputs = model(images)
-#         loss = criterion(outputs, labels)
+        # Forward pass
+        outputs = model(images)
+        loss = criterion(outputs, labels)
 
-#         # Backward and optimize
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
+        # Backward and optimize
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
-#         if (i+1) % 200 == 0:
-#             print (f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
+        if (i+1) % 200 == 0:
+            print (f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{n_total_steps}], Loss: {loss.item():.4f}')
 
-# print('Finished Training')
+print('Finished Training')
 # PATH = './maxoutMNIST.pth'
 # torch.save(model.state_dict(), PATH)
 
-# with torch.no_grad():
-#     n_correct = 0
-#     n_samples = 0
-#     n_class_correct = [0 for i in range(10)]
-#     n_class_samples = [0 for i in range(10)]
-#     for images, labels in test_loader:
-#         images = images.to(device)
-#         labels = labels.to(device)
-#         outputs = model(images)
-#         # max returns (value ,index)
-#         _, predicted = torch.max(outputs, 1)
-#         n_samples += labels.size(0)
-#         n_correct += (predicted == labels).sum().item()
+with torch.no_grad():
+    n_correct = 0
+    n_samples = 0
+    n_class_correct = [0 for i in range(10)]
+    n_class_samples = [0 for i in range(10)]
+    for images, labels in test_loader:
+        images = images.to(device)
+        labels = labels.to(device)
+        outputs = model(images)
+        # max returns (value ,index)
+        _, predicted = torch.max(outputs, 1)
+        n_samples += labels.size(0)
+        n_correct += (predicted == labels).sum().item()
 
-#         for i in range(labels.size(0)):
-#             label = labels[i]
-#             pred = predicted[i]
-#             if (label == pred):
-#                 n_class_correct[label] += 1
-#             n_class_samples[label] += 1
+        for i in range(labels.size(0)):
+            label = labels[i]
+            pred = predicted[i]
+            if (label == pred):
+                n_class_correct[label] += 1
+            n_class_samples[label] += 1
 
-#     acc = 100.0 * n_correct / n_samples
-#     print(f'Accuracy of the network: {acc} %')
+    acc = 100.0 * n_correct / n_samples
+    print(f'Accuracy of the network: {acc} %')
 
-#     for i in range(10):
-#         acc = 100.0 * n_class_correct[i] / n_class_samples[i]
-#         print(f'Accuracy of {classes[i]}: {acc} %')
+    for i in range(10):
+        acc = 100.0 * n_class_correct[i] / n_class_samples[i]
+        print(f'Accuracy of {classes[i]}: {acc} %')
