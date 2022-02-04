@@ -6,6 +6,9 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
 
+exec(open("mnist.py").read())
+exec(open("initialisation.py").read())
+
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -91,14 +94,12 @@ class MaxoutNet(nn.Module):
 
 model = MaxoutNet().to(device)
 
-print("model.children():")
-print(model.children())
-print(model.maxout_rank)
+X, X_labels = sample_MNIST(train_dataset, 3000)
 
-Layers = [layer for layer in model.children()]
-for layer in Layers:
-    print("layer:")
-    print(layer)
+unit_vecs = np.eye(10)
+R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
+
+reinitialise_Maxout_network(model, X, R10_labels)
 
 # criterion = nn.CrossEntropyLoss()
 # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
