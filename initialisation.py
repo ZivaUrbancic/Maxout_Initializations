@@ -505,14 +505,14 @@ def reinitialise_ReLU_network(model, X, Y):
         reinitialise_unit = True
         for k in range(layer.out_features):
             if reinitialise_unit:
-                print("reinitialising layer ",l," unit ",k)
+                # print("reinitialising layer ",l," unit ",k)
                 w = hyperplanes_through_largest_regions(X, R, C, maxout=None)
                 w = w[1]
                 R, C = update_regions_and_costs(R, C, [linear(w),zero], X, Y, L2_region_cost)
                 W += [w]
                 reinitialise_unit = largest_regions_have_positive_cost(C, 0)#layer.in_features)
             else:
-                print("keeping layer ",l," unit ",k)
+                # print("keeping layer ",l," unit ",k)
                 w = layer.weight[k,:]
                 ###############################################################
                 # Above I switched k and :
@@ -568,7 +568,7 @@ def reinitialise_Maxout_network(model, X, Y):
         for k in range(0, Layer[0].out_features):
 
             if mode == 0:
-                print("keeping layer ", l//maxout_rank, " unit ", k)
+                # print("keeping layer ", l//maxout_rank, " unit ", k)
                 w = [sub_layer.weight[k,:].detach().numpy() for sub_layer in Layer]
                 b = [sub_layer.bias[k].detach().numpy() for sub_layer in Layer]
                 wb = [np.concatenate((w[j], [b[j]])) for j in range(len(w))]
@@ -583,7 +583,7 @@ def reinitialise_Maxout_network(model, X, Y):
                     mode = 1
 
             elif mode == 1:
-                print("reinitialising layer ", l//maxout_rank," unit ", k)
+                # print("reinitialising layer ", l//maxout_rank," unit ", k)
                 w = hyperplanes_through_largest_regions(X, R, C,
                                                         maxout = maxout_rank)
                 R, C = update_regions_and_costs(R, C,
