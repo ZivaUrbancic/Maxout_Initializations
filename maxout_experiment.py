@@ -6,16 +6,18 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
 import random
-import json
 
 exec(open("mnist.py").read())
 exec(open("initialisation.py").read())
+np.set_printoptions(threshold=np.inf)
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters
-num_epochs = 5
+experiment_number = random.randint(0,999999999)
+num_runs = 1
+num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
 
@@ -98,10 +100,6 @@ class MaxoutNet(nn.Module):
         # x = mySoftmax(x) # wth does this make loss worse?
         return x
 
-experiment_number = random.randint(0,999999999)
-
-num_runs = 10
-
 for run in range(num_runs):
 
     train_loader = torch.utils.data.DataLoader(
@@ -115,7 +113,8 @@ for run in range(num_runs):
     modelDefault = MaxoutNet().to(device)
     modelReinit = MaxoutNet().to(device)
     print("run ",run+1," of ",num_runs,": reinitialising")
-    reinitialise_Maxout_network(modelReinit, X, R10_labels)
+    c_reinit = reinitialise_Maxout_network(modelReinit, X, R10_labels)
+    print([[run],c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 
     criterion = nn.CrossEntropyLoss()
     optimizerDefault = torch.optim.SGD(modelDefault.parameters(), lr=learning_rate)
@@ -146,46 +145,41 @@ for run in range(num_runs):
             optimizerReinit.step()
 
             if (i+1) % 10 == 0:
-                log_loss_default += [lossDefault.item()]
-                log_loss_reinit += [lossReinit.item()]
 
-    print("run ",run+1," of ",num_runs,": writing")
-    with torch.no_grad():
-        n_correct_default = 0
-        n_correct_reinit = 0
-        n_samples = 0
-        n_class_correct_default = [0 for i in range(10)]
-        n_class_correct_reinit = [0 for i in range(10)]
-        n_class_samples = [0 for i in range(10)]
-        for images, labels in test_loader:
-            images = images.to(device)
-            labels = labels.to(device)
-            outputsDefault = modelDefault(images)
-            outputsReinit = modelReinit(images)
-            _, predictedDefault = torch.max(outputsDefault, 1)
-            _, predictedReinit = torch.max(outputsReinit, 1)
-            n_samples += labels.size(0)
-            n_correct_default += (predictedDefault == labels).sum().item()
-            n_correct_reinit += (predictedReinit == labels).sum().item()
+                with torch.no_grad():
+                    n_correct_default = 0
+                    n_correct_reinit = 0
+                    n_samples = 0
+                    n_class_correct_default = [0 for i in range(10)]
+                    n_class_correct_reinit = [0 for i in range(10)]
+                    n_class_samples = [0 for i in range(10)]
+                    for images, labels in test_loader:
+                        images = images.to(device)
+                        labels = labels.to(device)
+                        outputsDefault = modelDefault(images)
+                        outputsReinit = modelReinit(images)
+                        _, predictedDefault = torch.max(outputsDefault, 1)
+                        _, predictedReinit = torch.max(outputsReinit, 1)
+                        n_samples += labels.size(0)
+                        n_correct_default += (predictedDefault == labels).sum().item()
+                        n_correct_reinit += (predictedReinit == labels).sum().item()
 
-            for i in range(labels.size(0)):
-                label = labels[i]
-                pred_default = predictedDefault[i]
-                if (label == pred_default):
-                    n_class_correct_default[label] += 1
-                pred_reinit = predictedReinit[i]
-                if (label == pred_reinit):
-                    n_class_correct_reinit[label] += 1
-                n_class_samples[label] += 1
+                        for j in range(labels.size(0)):
+                            label = labels[j]
+                            pred_default = predictedDefault[j]
+                            if (label == pred_default):
+                                n_class_correct_default[label] += 1
+                            pred_reinit = predictedReinit[j]
+                            if (label == pred_reinit):
+                                n_class_correct_reinit[label] += 1
+                            n_class_samples[label] += 1
 
-        acc_default = [n_correct_default / n_samples]
-        acc_reinit = [100.0 * n_correct_reinit / n_samples]
+                    acc_default = [100 * n_correct_default / n_samples]
+                    acc_reinit = [100 * n_correct_reinit / n_samples]
+                    acc_default += [n_class_correct_default[j] / n_class_samples[j] for j in range(10)]
+                    acc_reinit += [n_class_correct_reinit[j] / n_class_samples[j] for j in range(10)]
 
-        for i in range(10):
-            acc_default += [n_class_correct_default[i] / n_class_samples[i]]
-            acc_reinit += [n_class_correct_reinit[i] / n_class_samples[i]]
-
-        print(log_loss_default,file=open(str(experiment_number)+"_loss_default.log",'+a'))
-        print(log_loss_reinit,file=open(str(experiment_number)+"_loss_reinit.log",'+a'))
-        print(acc_default,file=open(str(experiment_number)+"_acc_default.log",'+a'))
-        print(acc_reinit,file=open(str(experiment_number)+"_acc_reinit.log",'+a'))
+                    print([[run,epoch,i],[lossDefault.item()]],file=open(str(experiment_number)+"_loss_default.log",'+a'))
+                    print([[run,epoch,i],[lossReinit.item()]],file=open(str(experiment_number)+"_loss_reinit.log",'+a'))
+                    print([[run,epoch,i],acc_default],file=open(str(experiment_number)+"_acc_default.log",'+a'))
+                    print([[run,epoch,i],acc_reinit],file=open(str(experiment_number)+"_acc_reinit.log",'+a'))

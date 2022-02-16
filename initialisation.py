@@ -568,7 +568,7 @@ def reinitialise_Maxout_network(model, X, Y):
         for k in range(0, Layer[0].out_features):
 
             if mode == 0:
-                # print("keeping layer ", l//maxout_rank, " unit ", k)
+                print("keeping layer ", l//maxout_rank, " unit ", k)
                 w = [sub_layer.weight[k,:].detach().numpy() for sub_layer in Layer]
                 b = [sub_layer.bias[k].detach().numpy() for sub_layer in Layer]
                 wb = [np.concatenate((w[j], [b[j]])) for j in range(len(w))]
@@ -583,7 +583,7 @@ def reinitialise_Maxout_network(model, X, Y):
                     mode = 1
 
             elif mode == 1:
-                # print("reinitialising layer ", l//maxout_rank," unit ", k)
+                print("reinitialising layer ", l//maxout_rank," unit ", k)
                 w = hyperplanes_through_largest_regions(X, R, C,
                                                         maxout = maxout_rank)
                 R, C = update_regions_and_costs(R, C,
@@ -634,3 +634,5 @@ def reinitialise_Maxout_network(model, X, Y):
         if not reinitialise_unit:
             #print("Stopping reinitialisation due to lack of large regions.")
             break
+
+    return C
