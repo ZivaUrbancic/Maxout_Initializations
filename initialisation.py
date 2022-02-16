@@ -547,6 +547,7 @@ def reinitialise_ReLU_network(model, X, Y):
             #print("Stopping reinitialisation due to lack of large regions.")
             break
 
+    return C
 
 
 
