@@ -99,7 +99,7 @@ X, X_labels = sample_MNIST(train_dataset, 3000)
 unit_vecs = np.eye(10)
 R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
 
-# reinitialise_Maxout_network(model, X, R10_labels)
+reinitialise_Maxout_network(model, X, R10_labels)
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)

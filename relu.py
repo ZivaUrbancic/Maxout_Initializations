@@ -68,15 +68,15 @@ output_normalisation = nn.LogSoftmax(dim=-1)
 class ReLUNet(nn.Module):
     def __init__(self):
         super(ReLUNet, self).__init__()
-        self.layer1 = nn.Linear(28*28, 10)
-        #self.layer2 = nn.Linear(10, 10)
-        self.layer3 = nn.Linear(10, 10)
+        self.layer1 = nn.Linear(28*28, 32)
+        self.layer2 = nn.Linear(32, 16)
+        self.layer3 = nn.Linear(16, 10)
 
 
     def forward(self, x):
         x = x.view(x.size(0), -1) # I do not understand this black magic, x is not a single image, but a tensor of images. How does this code work?
         x = activation(self.layer1(x))
-        x# = activation(self.layer2(x))
+        x = activation(self.layer2(x))
         x = output_normalisation(self.layer3(x))
         return x
 
@@ -153,6 +153,3 @@ with torch.no_grad():
     for i in range(10):
         acc = 100.0 * n_class_correct[i] / n_class_samples[i]
         print(f'Accuracy of {classes[i]}: {acc} %')
-
-
-
