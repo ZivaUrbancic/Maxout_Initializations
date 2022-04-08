@@ -1,31 +1,38 @@
+###
+# Prep work
+###
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
 import numpy as np
 import random
-
 exec(open("mnist.py").read())
 exec(open("initialisation.py").read())
 np.set_printoptions(threshold=np.inf)
-
-# Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Hyper-parameters
+
+
+###
+# Experiment hyperparameters
+###
 experiment_number = random.randint(0,999999999)
 num_runs = 1
 num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
-dataset = "MNIST"
+dataset = "CIFAR10"
 
-# shamelessly stolen from the web, as is everything else in this file
+
+
+###
+# Loading Data
+###
 if dataset == "MNIST":
-    transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.1307,),(0.3081,))])
-    # MNIST: 60000 28x28 color images in 10 classes
+    # copied from ...
+    transform = transforms.Compose([transforms.ToTensor(),
+                                    transforms.Normalize((0.1307,),(0.3081,))])
     train_dataset = torchvision.datasets.MNIST(root='./data',
                                                train=True,
                                                download=True,
@@ -34,30 +41,50 @@ if dataset == "MNIST":
                                               train=False,
                                               download=True,
                                               transform=transform)
+    # moved below to ensure that data batches are different in each run
+    # train_loader = torch.utils.data.DataLoader(trainset,
+    #                                           batch_size=batch_size,
+    #                                           shuffle=True)
     test_loader = torch.utils.data.DataLoader(test_dataset,
                                               batch_size=batch_size,
                                               shuffle=False)
     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
-if dataset == "???": # todo
-    pass
+if dataset == "CIFAR10": # todo
+    # copied from https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
+    transform = transforms.Compose([transforms.ToTensor(),
+                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    train_dataset = torchvision.datasets.CIFAR10(root='./data',
+                                                 train=True,
+                                                 download=True,
+                                                 transform=transform)
+    test_dataset = torchvision.datasets.CIFAR10(root='./data',
+                                                train=False,
+                                                download=True,
+                                                transform=transform)
+    # moved below to ensure that data batches are different in each run
+    # train_loader = torch.utils.data.DataLoader(trainset,
+    #                                           batch_size=batch_size,
+    #                                           shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_dataset,
+                                              batch_size=batch_size,
+                                              shuffle=False)
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-def imshow(img):
-    img = img / 2 + 0.5  # unnormalize
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    plt.show()
 
+
+###
+# Defining Network
+###
 activation = nn.ReLU()
 output_normalisation = nn.LogSoftmax(dim=-1)
-
 class ReLUNet(nn.Module):
     def __init__(self):
         super(ReLUNet, self).__init__()
-        self.layer1 = nn.Linear(28*28, 10)
+        # self.layer1 = nn.Linear(28*28, 10)
+        self.layer1 = nn.Linear(3*32*32, 10)
         self.layer2 = nn.Linear(10, 10)
         self.layer3 = nn.Linear(10, 10)
-
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
@@ -66,18 +93,20 @@ class ReLUNet(nn.Module):
         x = output_normalisation(self.layer3(x))
         return x
 
+
+###
+# Running experiments
+###
 modelDefault = ReLUNet().to(device)
-print("[relu, ???] (relu or maxout, if maxout what rank, architecture sizes, dataset)",file=open(str(experiment_number)+".log",'+a') # todo
+print("[relu, ???] (relu or maxout, if maxout what rank, architecture sizes, dataset)",file=open(str(experiment_number)+".log",'+a')) # todo
 
 for run in range(num_runs):
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True)
-    X, X_labels = sample_MNIST(train_dataset, 3000)
-    unit_vecs = np.eye(10)
-    R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                               batch_size=batch_size,
+                                               shuffle=True)
+    X, X_labels = sample_dataset_flatten_and_floatify(train_dataset, 1)
+    unit_vecs = np.eye(len(train_dataset.classes))
+    R10_labels = np.array([unit_vecs[i] for i in range(len(train_dataset.classes))])
 
     modelDefault = ReLUNet().to(device)
     modelReinit = ReLUNet().to(device)

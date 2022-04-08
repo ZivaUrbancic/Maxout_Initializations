@@ -9,10 +9,36 @@ Created on Wed Nov 10 13:33:28 2021
 import torch
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
 #from matplotlib import cm
 from scipy.linalg import null_space
 from scipy.spatial.distance import cdist, euclidean
+
+
+
+# loads N points from each class from a dataset of class 'torchvision.datasets'
+def sample_dataset_flatten_and_floatify(dataset,N,random=False):
+    indices = np.arange(len(dataset.targets))
+    if random:
+        np.random.shuffle(indices)
+    targets = [target for target in dataset.class_to_idx.values()]
+    targets_counter = np.zeros(len(targets))
+    X = []
+    Xtargets = []
+
+    for i in indices:
+        for j in targets:
+            if targets[j] == dataset.targets[i] and targets_counter[j]<N:
+                x = dataset.data[i]
+                # make x into a numpy.ndarray, if it is not
+                if type(x)==type(torch.Tensor(1)):
+                    x = x.numpy()
+                X += [x.flatten()]
+                Xtargets += [dataset.targets[i]]
+                targets_counter[j] += 1
+        if len(Xtargets) == N*len(targets):
+            break
+
+    return np.array(X).astype('float32'), Xtargets
 
 
 
