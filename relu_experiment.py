@@ -22,7 +22,40 @@ num_runs = 1
 num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
-dataset = "CIFAR10"
+dataset = "MNIST"
+network_size = "small" # "small" or "large"
+
+
+
+# TODO: make sure the following numbers make sense
+# small size = largest network size where default initialisation leads to bad accuracy
+# large size = smallest network size where default initialisation leads to good accuracy
+if dataset=="MNIST" and network_size=="small":
+    n0 = 28*28 # = network_size of input
+    n1 = 10
+    n2 = 10
+    n3 = 10 # = network_size of output
+    data_sample_size = 3000
+elif dataset=="MNIST" and network_size=="large":
+    n0 = 28*28 # = network_size of input
+    n1 = 32
+    n2 = 16
+    n3 = 10 # = network_size of output
+    data_sample_size = 3000
+elif dataset=="CIFAR10" and network_size=="small":
+    n0 = 32*32*3 # = network_size of input
+    n1 = 10
+    n2 = 10
+    n3 = 10 # = network_size of output
+    data_sample_size = 3000
+elif dataset=="CIFAR10" and network_size=="large":
+    n0 = 32*32*3 # = size of input
+    n1 = 32
+    n2 = 16
+    n3 = 10 # = size of output
+    data_sample_size = 3000
+else:
+    raise NameError("unsupported dataset or size")
 
 
 
@@ -81,10 +114,9 @@ output_normalisation = nn.LogSoftmax(dim=-1)
 class ReLUNet(nn.Module):
     def __init__(self):
         super(ReLUNet, self).__init__()
-        # self.layer1 = nn.Linear(28*28, 10)
-        self.layer1 = nn.Linear(3*32*32, 10)
-        self.layer2 = nn.Linear(10, 10)
-        self.layer3 = nn.Linear(10, 10)
+        self.layer1 = nn.Linear(n0, n1)
+        self.layer2 = nn.Linear(n1, n2)
+        self.layer3 = nn.Linear(n2, n3)
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
@@ -98,21 +130,35 @@ class ReLUNet(nn.Module):
 # Running experiments
 ###
 modelDefault = ReLUNet().to(device)
-print("[relu, ???] (relu or maxout, if maxout what rank, architecture sizes, dataset)",file=open(str(experiment_number)+".log",'+a')) # todo
+print("activation: relu\n",
+      "rank: N/A\n",
+      "hidden layers: 2\n",
+      "widths:",n0,n1,n2,n3,"\n",
+      "dataset:",dataset,"\n",
+      "data_sample_size:",data_sample_size,"\n",
+      "num_runs:",num_runs,"\n",
+      "num_epochs",num_epochs,"\n",
+      file=open(str(experiment_number)+".log",'+a'))
 
 for run in range(num_runs):
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size,
                                                shuffle=True)
-    X, X_labels = sample_dataset_flatten_and_floatify(train_dataset, 1)
-    unit_vecs = np.eye(len(train_dataset.classes))
-    R10_labels = np.array([unit_vecs[i] for i in range(len(train_dataset.classes))])
+    X, X_labels = sample_dataset_flatten_and_floatify(train_dataset, data_sample_size)
+    Y = np.zeros((len(X),len(classes)))
+    for i,x_label in enumerate(X_labels):
+        for j,c in enumerate(classes):
+            if type(x_label)==type(torch.Tensor(1)):
+                x_label = x_label.item() # make tensor with one entry to int
+            if str(x_label)==c:
+                Y[i][j] = 1
+
 
     modelDefault = ReLUNet().to(device)
     modelReinit = ReLUNet().to(device)
     print("run ",run+1," of ",num_runs,": reinitialising")
-    c_reinit = reinitialise_ReLU_network(modelReinit, X, R10_labels)
-    print([[run],c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
+    c_reinit = reinitialise_ReLU_network(modelReinit, X, Y)
+    print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 
     criterion = nn.CrossEntropyLoss()
     optimizerDefault = torch.optim.SGD(modelDefault.parameters(), lr=learning_rate)

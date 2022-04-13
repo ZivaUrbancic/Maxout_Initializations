@@ -1,82 +1,133 @@
+###
+# Prep work
+###
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
 import numpy as np
 import random
-
 exec(open("mnist.py").read())
 exec(open("initialisation.py").read())
 np.set_printoptions(threshold=np.inf)
-
-# Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Hyper-parameters
+
+
+###
+# Experiment hyperparameters
+###
 experiment_number = random.randint(0,999999999)
 num_runs = 1
 num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
-
-# shamelessly stolen from the web, as is everything else in this file
-transform = transforms.Compose([
-                                transforms.ToTensor(),
-                                transforms.Normalize((0.1307,),(0.3081,))
-                                ])
+dataset = "MNIST"
+network_size = "small" # "small" or "large"
+network_rank = 3 # WARNING: does not change network below, adjust by hand
 
 
-# MNIST: 60000 28x28 color images in 10 classes
-train_dataset = torchvision.datasets.MNIST(root='./data',
-                                           train=True,
-                                           download=True,
-                                           transform=transform)
 
-test_dataset = torchvision.datasets.MNIST(root='./data',
-                                          train=False,
-                                          download=True,
-                                          transform=transform)
+# TODO: make sure the following numbers make sense
+# small size = largest network size where default initialisation leads to bad accuracy
+# large size = smallest network size where default initialisation leads to good accuracy
+if dataset=="MNIST" and network_size=="small":
+    n0 = 28*28 # = network_size of input
+    n1 = 10
+    n2 = 10
+    n3 = 10 # = network_size of output
+    data_sample_size = 3000
+elif dataset=="MNIST" and network_size=="large":
+    n0 = 28*28 # = network_size of input
+    n1 = 32
+    n2 = 16
+    n3 = 10 # = network_size of output
+    data_sample_size = 3000
+elif dataset=="CIFAR10" and network_size=="small":
+    n0 = 32*32*3 # = network_size of input
+    n1 = 10
+    n2 = 10
+    n3 = 10 # = network_size of output
+    data_sample_size = 3000
+elif dataset=="CIFAR10" and network_size=="large":
+    n0 = 32*32*3 # = size of input
+    n1 = 32
+    n2 = 16
+    n3 = 10 # = size of output
+    data_sample_size = 3000
+else:
+    raise NameError("unsupported dataset or size")
 
-test_loader = torch.utils.data.DataLoader(test_dataset,
-                                          batch_size=batch_size,
-                                          shuffle=False)
 
-classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
-def imshow(img):
-    img = img / 2 + 0.5  # unnormalize
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    plt.show()
+###
+# Loading Data
+###
+if dataset == "MNIST":
+    # copied from ...
+    transform = transforms.Compose([transforms.ToTensor(),
+                                    transforms.Normalize((0.1307,),(0.3081,))])
+    train_dataset = torchvision.datasets.MNIST(root='./data',
+                                               train=True,
+                                               download=True,
+                                               transform=transform)
+    test_dataset = torchvision.datasets.MNIST(root='./data',
+                                              train=False,
+                                              download=True,
+                                              transform=transform)
+    # moved below to ensure that data batches are different in each run
+    # train_loader = torch.utils.data.DataLoader(trainset,
+    #                                           batch_size=batch_size,
+    #                                           shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_dataset,
+                                              batch_size=batch_size,
+                                              shuffle=False)
+    classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
-# get some random training images
-# dataiter = iter(train_loader)
-# images, labels = dataiter.next()
-# show images
-# imshow(torchvision.utils.make_grid(images))
+if dataset == "CIFAR10": # todo
+    # copied from https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
+    transform = transforms.Compose([transforms.ToTensor(),
+                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    train_dataset = torchvision.datasets.CIFAR10(root='./data',
+                                                 train=True,
+                                                 download=True,
+                                                 transform=transform)
+    test_dataset = torchvision.datasets.CIFAR10(root='./data',
+                                                train=False,
+                                                download=True,
+                                                transform=transform)
+    # moved below to ensure that data batches are different in each run
+    # train_loader = torch.utils.data.DataLoader(trainset,
+    #                                           batch_size=batch_size,
+    #                                           shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_dataset,
+                                              batch_size=batch_size,
+                                              shuffle=False)
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
+
+###
+# Defining Network
+###
 mySoftmax = torch.nn.Softmax(dim=0)
-
 class MaxoutNet(nn.Module):
     def __init__(self):
         super(MaxoutNet, self).__init__()
-        self.lay1lin1 = nn.Linear(28*28, 11)
-        self.lay1lin2 = nn.Linear(28*28, 11)
-        self.lay1lin3 = nn.Linear(28*28, 11)
-        self.lay2lin1 = nn.Linear(11, 10)
-        self.lay2lin2 = nn.Linear(11, 10)
-        self.lay2lin3 = nn.Linear(11, 10)
-        self.lay3lin1 = nn.Linear(10, 10)
-        self.lay3lin2 = nn.Linear(10, 10)
-        self.lay3lin3 = nn.Linear(10, 10)
+        self.lay1lin1 = nn.Linear(n0, n1)
+        self.lay1lin2 = nn.Linear(n0, n1)
+        self.lay1lin3 = nn.Linear(n0, n1)
+        self.lay2lin1 = nn.Linear(n1, n2)
+        self.lay2lin2 = nn.Linear(n1, n2)
+        self.lay2lin3 = nn.Linear(n1, n2)
+        self.lay3lin1 = nn.Linear(n2, n3)
+        self.lay3lin2 = nn.Linear(n2, n3)
+        self.lay3lin3 = nn.Linear(n2, n3)
         self.maxout_rank = 3
 
 
     def forward(self, x):
-        x = x.view(x.size(0), -1) # I do not understand this black magic, x is not a single image, but a tensor of images. How does this code work?
-        x = x.unsqueeze(0) # make vector of length 784 into 1*784 matrix
+        x = x.view(x.size(0), -1)
+        x = x.unsqueeze(0) # make vector of length n0 into 1*n0 matrix
         X = torch.cat( (self.lay1lin1(x),self.lay1lin2(x),self.lay1lin3(x)), 0)
               # concatenate output vectors into matrix (row-wise by default)
               # size: rank * width layer 1
@@ -100,21 +151,38 @@ class MaxoutNet(nn.Module):
         # x = mySoftmax(x) # wth does this make loss worse?
         return x
 
-for run in range(num_runs):
+###
+# Running experiments
+###
+modelDefault = MaxoutNet().to(device)
+print("activation: maxout\n",
+      "rank:",network_rank,"\n",
+      "hidden layers: 2\n",
+      "widths:",n0,n1,n2,n3,"\n",
+      "dataset:",dataset,"\n",
+      "data_sample_size:",data_sample_size,"\n",
+      "num_runs:",num_runs,"\n",
+      "num_epochs",num_epochs,"\n",
+      file=open(str(experiment_number)+".log",'+a'))
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True)
-    X, X_labels = sample_MNIST(train_dataset, 3000)
-    unit_vecs = np.eye(10)
-    R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
+for run in range(num_runs):
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                               batch_size=batch_size,
+                                               shuffle=True)
+    X, X_labels = sample_dataset_flatten_and_floatify(train_dataset, data_sample_size)
+    Y = np.zeros((len(X),len(classes)))
+    for i,x_label in enumerate(X_labels):
+        for j,c in enumerate(classes):
+            if type(x_label)==type(torch.Tensor(1)):
+                x_label = x_label.item() # make tensor with one entry to int
+            if str(x_label)==c:
+                Y[i][j] = 1
 
     modelDefault = MaxoutNet().to(device)
     modelReinit = MaxoutNet().to(device)
     print("run ",run+1," of ",num_runs,": reinitialising")
-    c_reinit = reinitialise_Maxout_network(modelReinit, X, R10_labels)
-    print([[run],c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
+    c_reinit = reinitialise_Maxout_network(modelReinit, X, Y)
+    print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 
     criterion = nn.CrossEntropyLoss()
     optimizerDefault = torch.optim.SGD(modelDefault.parameters(), lr=learning_rate)

@@ -183,7 +183,6 @@ def update_regions_and_costs(R, C, functions, X, Y, region_cost):
                 data_indices = R[region[0]:, -1]
             else:
                 data_indices = R[region[0] : region[1], -1]
-            #print(data_indices)
             C[region[0]] = region_cost(data_indices, Y)
 
         if region[1] == before_regions[i][1]:
@@ -334,9 +333,9 @@ def reinitialise_ReLU_network(model, X, Y):
             # keep existing parameters until the end of the reinitialisation
             else:
                 print("keeping layer ", l, " unit ", k)
-                w = [layer.weight[k,:].detach().numpy()]
-                b = [layer.bias[k].detach().numpy()]
-                WB += [np.append(w, b)]
+                w = layer.weight[k,:].detach().numpy()
+                b = layer.bias[k].detach().numpy()
+                WB += [np.append([w], [b])]
 
         WB = np.array(WB) # converting to np.array to improve performance of next steps
         Weights = WB[:,:-1]
