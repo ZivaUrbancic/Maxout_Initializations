@@ -108,20 +108,32 @@ def regions(X, functions):
         reg += [np.argmax(vals)]
 
     return reg
-
-
-
-def vector_variance(Y):
-    differences = Y - np.mean(Y, axis = 0)
-    return np.sum(differences**2)/Y.shape[0]
-
-
+ 
+def class_to_unit_vector(class_labels):
+    # where the class labels are integers
+    n = int(torch.max(class_labels)) + 1
+    unit_vecs = np.eye(n)
+    Rn_labels = np.array([unit_vecs[int(i)] for i in class_labels])
+    return Rn_labels
 
 def L2_region_cost(indices, Y):
     region_labels = np.array(Y[indices])
-    return len(indices)*vector_variance(region_labels)
+    differences = region_labels - np.mean(region_labels, axis = 0)
+    return np.sum(differences**2)
 
+def CE_region_cost(indices, Y, number_of_classes):
+    region_labels = Y[indices]
+    n = len(region_labels)
+    mean = [0]*number_of_classes
+    for k in region_labels:
+        mean[int(k)] += 1/n
+    mean_dist = torch.log(torch.tensor([mean]*n))
+    CE = nn.CrossEntropyLoss(reduction = 'sum')(mean_dist, region_labels)
+    return CE
 
+#indices = [i for i in range(6)]
+#Y = torch.tensor([0,0,0,0,0,0])
+#print(CE_region_cost(indices, Y, 3))
 
 def regions_from_costs(costs):
 
@@ -156,6 +168,8 @@ def regions_from_matrix(R):
 
 def update_regions_and_costs(R, C, functions, X, Y, region_cost):
 
+        
+
     sorted_X = X[R[:,-1]]
     regs = np.array(regions(sorted_X, functions)).reshape(-1,1)
 
@@ -183,7 +197,7 @@ def update_regions_and_costs(R, C, functions, X, Y, region_cost):
                 data_indices = R[region[0]:, -1]
             else:
                 data_indices = R[region[0] : region[1], -1]
-            C[region[0]] = region_cost(data_indices, Y)
+            C[region[0]] = region_cost(data_indices, Y, 10)
 
         if region[1] == before_regions[i][1]:
             i += 1
@@ -306,6 +320,10 @@ def reinitialise_ReLU_network(model, X, Y):
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
     reinitialise_unit = True
+    
+    # If using L2 cost:
+    Y = class_to_unit_vector(Y)
+    
 
     stage = 1 # stages of the reinitialisation process (see below)
     for l, layer in enumerate(Layers):
@@ -324,7 +342,7 @@ def reinitialise_ReLU_network(model, X, Y):
                 wb = hyperplanes_through_largest_regions(X, R, C)
                 R, C = update_regions_and_costs(R, C,
                                                 [linear(wbj) for wbj in wb],
-                                                X, Y, L2_region_cost)
+                                                X, Y, CE_region_cost)
                 WB += [wb[1]] # wb[0] contains only zeroes
                 if not largest_regions_have_positive_cost(C,0):
                     stage = 2
@@ -372,6 +390,9 @@ def reinitialise_Maxout_network(model, X, Y):
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
 
+    # If using L2 cost:
+    #Y = class_to_unit_vector(Y)
+
     stage = 0 # stages of the reinitialisation process (see below)
     for l in range(0, len(Sublayers), maxout_rank):
         # list of matrices, each matrix represents the weights and biases of a sublayer:
@@ -390,7 +411,7 @@ def reinitialise_Maxout_network(model, X, Y):
                 wb = [np.concatenate((w[j], [b[j]])) for j in range(len(w))]
                 R, C = update_regions_and_costs(R, C,
                                                 [linear(wbj) for wbj in wb],
-                                                X, Y, L2_region_cost)
+                                                X, Y, CE_region_cost)
                 for j, WBj in enumerate(WB):
                     WBj += [np.append(w[j], [b[j]])]
                 if largest_regions_have_positive_cost(C, maxout_rank - 2): # returns false if number of regions < maxout_rank - 2
@@ -404,7 +425,7 @@ def reinitialise_Maxout_network(model, X, Y):
                                                          maxout = maxout_rank)
                 R, C = update_regions_and_costs(R, C,
                                                 [linear(wbj) for wbj in wb],
-                                                X, Y, L2_region_cost)
+                                                X, Y, CE_region_cost)
                 for j, WBj in enumerate(WB):
                     WBj += [wb[j]]
                 if not largest_regions_have_positive_cost(C, maxout_rank - 2):
@@ -574,3 +595,40 @@ def hyperplane_through_largest_regions(X, R, C,
             medians += [geometric_median(data)]
 
     return hyperplane_through_points(medians)
+
+# m = nn.Conv2d(3, 6, (2,3), stride=2)
+# h, w = m.kernel_size
+# c0 = w*h
+# crop_conv = nn.Conv2d(m.in_channels,
+#                       c0*m.in_channels,
+#                       m.kernel_size,
+#                       m.stride,
+#                       m.padding,
+#                       m.dilation,
+#                       m.groups,
+#                       False,
+#                       m.padding_mode)
+# W = torch.zeros(crop_conv.weight.size())
+
+# for channel in range(m.in_channels):
+#     for y in range(h):
+#         for x in range(w):
+#             W[channel*c0 + y*w + x, channel, y, x] = 1.
+
+# crop_conv.weight = nn.Parameter(W)
+
+# X_cropped = crop_conv(X)
+
+# for l in range(m.out_channels):
+#     W = []
+#     for k in range(m.in_channels):
+#         Wk = reinitialise_weights(X_cropped[k*c0 : (k+1)*c0])
+#         W += torch.reshape(Wk, (h,w))
+#     m.weight[l] = W
+    
+# X_cropped = torch.tensor(Y)
+
+
+    
+
+

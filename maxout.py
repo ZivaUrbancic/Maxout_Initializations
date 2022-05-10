@@ -13,7 +13,7 @@ exec(open("initialisation.py").read())
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters
-num_epochs = 1
+num_epochs = 3
 batch_size = 64
 learning_rate = 0.001
 
@@ -96,10 +96,10 @@ model = MaxoutNet().to(device)
 
 X, X_labels = sample_MNIST(train_dataset, 3000)
 
-unit_vecs = np.eye(10)
-R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
+#unit_vecs = np.eye(10)
+#R10_labels = np.array([unit_vecs[i] for i in X_labels.int()])
 
-reinitialise_Maxout_network(model, X, R10_labels)
+reinitialise_Maxout_network(model, X, X_labels.long())
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
@@ -107,7 +107,7 @@ optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 n_total_steps = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):
-        print(i)
+        #print(i)
         images, labels = images.to(device), labels.to(device)
 
         # Forward pass
@@ -153,3 +153,6 @@ with torch.no_grad():
     for i in range(10):
         acc = 100.0 * n_class_correct[i] / n_class_samples[i]
         print(f'Accuracy of {classes[i]}: {acc} %')
+        
+        
+
