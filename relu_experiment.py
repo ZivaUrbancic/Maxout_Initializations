@@ -19,7 +19,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ###
 experiment_number = random.randint(0,999999999)
 num_runs = 1
-num_epochs = 2
+num_epochs = 12
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"

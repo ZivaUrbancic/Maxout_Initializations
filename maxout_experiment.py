@@ -19,7 +19,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ###
 experiment_number = random.randint(0,999999999)
 num_runs = 1
-num_epochs = 2
+num_epochs = 12
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
@@ -36,25 +36,27 @@ if dataset=="MNIST" and network_size=="small":
     n1 = 10
     n2 = 10
     n3 = 10 # = network_size of output
-    data_sample_size = 3000
+    data_sample_size = 10000
 elif dataset=="MNIST" and network_size=="large":
     n0 = 28*28 # = network_size of input
     n1 = 32
     n2 = 16
     n3 = 10 # = network_size of output
-    data_sample_size = 3000
+    data_sample_size = 10000
 elif dataset=="CIFAR10" and network_size=="small":
     n0 = 32*32*3 # = network_size of input
-    n1 = 10
-    n2 = 10
-    n3 = 10 # = network_size of output
-    data_sample_size = 3000
+    n1 = 32*32*3
+    n2 = 1024
+    n3 = 256
+    n4 = 64
+    n5 = 10 # = network_size of output
+    data_sample_size = 10000
 elif dataset=="CIFAR10" and network_size=="large":
     n0 = 32*32*3 # = size of input
     n1 = 32
     n2 = 16
     n3 = 10 # = size of output
-    data_sample_size = 3000
+    data_sample_size = 10000
 else:
     raise NameError("unsupported dataset or size")
 

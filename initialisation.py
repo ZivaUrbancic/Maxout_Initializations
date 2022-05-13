@@ -108,7 +108,7 @@ def regions(X, functions):
         reg += [np.argmax(vals)]
 
     return reg
- 
+
 def class_to_unit_vector(class_labels):
     # where the class labels are integers
     n = int(torch.max(class_labels)) + 1
@@ -168,7 +168,7 @@ def regions_from_matrix(R):
 
 def update_regions_and_costs(R, C, functions, X, Y, region_cost):
 
-        
+
 
     sorted_X = X[R[:,-1]]
     regs = np.array(regions(sorted_X, functions)).reshape(-1,1)
@@ -293,6 +293,11 @@ def maxout_activation(weights_and_biases):
         functions += [linear(weights_and_biases[i])]
     return functions
 
+def maxout_activation(weights_and_biases):
+    functions = []
+    for i in range(weights_and_biases.shape[0]):
+        functions += [linear(weights_and_biases[i])]
+    return functions
 
 
 def fix_variance(X, weights, biases):
@@ -303,10 +308,23 @@ def fix_variance(X, weights, biases):
     return weights, biases
 
 
+def fix_child_variance(child, X):
+    Xvar = torch.var(X, axis=0)
+    scale_factor = torch.sqrt(Xvar)**-1
+    with torch.no_grad():
+        child.weight *= scale_factor.reshape(len(scale_factor), 1)
+        child.bias *= scale_factor.reshape(len(scale_factor), 1)
+
+# returns the cost of the k-th largest region (starting at 0)
+# returns -1 if k > #linear regions
+def k_th_largest_region_cost(C,k):
+    C[::-1].sort()
+    return C[k]
+
+
 
 def largest_regions_have_positive_cost(C, k):
-    costs = np.sort([c for c in C if c > -1])
-    return costs[len(costs) - k - 1] > 0
+    return k_th_largest_region_cost(C, k) > 0
 
 
 
@@ -320,10 +338,10 @@ def reinitialise_ReLU_network(model, X, Y):
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
     reinitialise_unit = True
-    
+
     # If using L2 cost:
     Y = class_to_unit_vector(Y)
-    
+
 
     stage = 1 # stages of the reinitialisation process (see below)
     for l, layer in enumerate(Layers):
@@ -449,6 +467,9 @@ def reinitialise_Maxout_network(model, X, Y):
             Layer[j].weight = nn.Parameter(Weights)
             Layer[j].bias = nn.Parameter(Biases)
         with torch.no_grad():
+            print(X.shape)
+            print(Layer[0].weight.shape)
+            print(Layer[0].bias.shape)
             sublayer_images = [np.array(sublayer(torch.tensor(X)))
                            for sublayer in Layer]
             sublayer_images = np.array(sublayer_images)
@@ -464,6 +485,9 @@ def reinitialise_Maxout_network(model, X, Y):
 
         # compute image of the dataset under the adjusted parameters
         with torch.no_grad():
+            print(X.shape)
+            print(Layer[0].weight.shape)
+            print(Layer[0].bias.shape)
             sublayer_images = [np.array(sublayer(torch.tensor(X)))
                            for sublayer in Layer]
             sublayer_images = np.array(sublayer_images)
@@ -625,10 +649,115 @@ def hyperplane_through_largest_regions(X, R, C,
 #         Wk = reinitialise_weights(X_cropped[k*c0 : (k+1)*c0])
 #         W += torch.reshape(Wk, (h,w))
 #     m.weight[l] = W
-    
+
 # X_cropped = torch.tensor(Y)
 
 
+
+
+
+def reinitialise_network(model, X, Y):
+    N = X.shape[0] # number of data points
+    R = initialise_region_matrix(N)
+    C = initialise_costs_vector(N)
     
+    skip = 0
+    children = [child for child in model.children()]
+    for i, child in enumerate(children):
+        if skip>0:
+            skip -= 1
+            pass
+
+        if type(child)==torch.nn.modules.conv.Conv1d:
+            X, R, C = reinitialise_conv1d_layer(child, X, Y, R, C)
+
+        elif type(child)==torch.nn.modules.conv.Conv2d:
+            X, R, C = reinitialise_conv2d_layer(child, X, Y, R, C)
+
+        elif type(child)==torch.nn.modules.linear.Linear:
+            print('linear')
+            if hasattr(model, 'maxout_rank'):
+                X, R, C = reinitialise_maxout_layer(children[i:i+model.maxout_rank], X, Y, R, C)
+                skip = model.maxout_rank-1
+            else:
+                X, R, C = reinitialise_relu_layer(child, X, Y, R, C)
+        else:
+            print(type(child))
+            # todo: check if layer supported, print warning if not
+            pass
 
 
+def reinitialise_maxout_layer(children, X, Y, R, C):
+    maxout_rank = len(children)
+    # step 0: check whether maxout_rank > number of regions
+    if k_th_largest_region_cost(C, maxout_rank-2) == -1:
+        stage = 0
+    elif k_th_largest_region_cost(C, maxout_rank-2) == 0:
+        stage = 2
+    else:
+        stage = 1
+
+    # step 1: reintialise parameters
+    for k in range(children[0].out_features):
+        # stage 0:
+        # not enough regions for running special reinitialisation routines
+        # keep existing parameters until enough regions are instantiated
+        if stage == 0:
+            print("keeping unit ", k)
+            w = [child.weight[k,:].detach().numpy() for child in children]
+            b = [child.bias[k].detach().numpy() for child in children]
+            wb = [np.concatenate((w[j], [b[j]])) for j in range(len(w))]
+            R, C = update_regions_and_costs(R, C,
+                                            [linear(wbj) for wbj in wb],
+                                            X, Y, CE_region_cost)
+
+            k_cost = k_th_largest_region_cost(C, maxout_rank - 2)
+            if k_cost > 0: # returns false if number of regions < maxout_rank - 2
+                stage = 1
+            if k_cost == 0: # returns false if number of regions < maxout_rank - 2
+                R = []
+                C = []
+                print("keeping unit ", k + 1, " onwards")
+                break
+
+        # stage 1:
+        # use special reinitialisation routines until regions fall below certain size
+        else:
+            print("reinitialising unit ", k)
+            wb = hyperplanes_through_largest_regions(X, R, C,
+                                                     maxout = maxout_rank)
+            
+            R, C = update_regions_and_costs(R, C,
+                                            [linear(wbj) for wbj in wb],
+                                            X, Y, CE_region_cost)
+            with torch.no_grad():
+                for j, child in enumerate(children):
+                    child.weight = nn.Parameter(torch.tensor(wb[j][:-1]))
+                    child.bias = nn.Parameter(torch.tensor(wb[j][-1]))
+                    
+            if k_th_largest_region_cost(C, maxout_rank - 2) == 0:
+                R = []
+                C = []
+                print("keeping unit ", k + 1, " onwards")
+                break
+            
+
+    # step 3: adjust weights to control variance and forward X
+    # compute image of the dataset under the current parameters:
+    with torch.no_grad():
+        print(X.shape)
+        print(children[0].weight.shape)
+        print(children[0].bias.shape)
+        Xtemp = torch.amax([child(torch.tensor(X)) for child in children],
+                            axis = 0)
+
+    # adjust weights and biases to control the variance:
+    for child in children:
+        fix_variance(child, Xtemp)
+
+    # compute image of the dataset under the adjusted parameters
+    with torch.no_grad():
+        X = torch.amax([child(torch.tensor(X)) for child in children],
+                        axis = 0)
+    
+    return X, R, C
