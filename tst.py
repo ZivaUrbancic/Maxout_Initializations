@@ -132,11 +132,12 @@ class M5(nn.Module):
 model = MaxoutNet().to(device)
 modelConv = M5().to(device)
 
-X, X_labels = sample_MNIST(train_dataset, 3000)
+X, X_labels = sample_dataset(train_dataset, 3000)
+print(X_labels[0])
 
 
-reinitialise_Maxout_network(model, X, X_labels.long())
-reinitialise_network(model, X, X_labels.long())
+reinitialise_Maxout_network(model, X, X_labels)
+reinitialise_network(model, X, X_labels)
 
 #criterion = nn.CrossEntropyLoss()
 #optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
