@@ -18,12 +18,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 1
-num_epochs = 12
+num_runs = 6
+num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
-network_size = "small" # "small" or "large"
+network_size = "large" # "small" or "large"
 
 
 
@@ -144,20 +144,12 @@ for run in range(num_runs):
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size,
                                                shuffle=True)
-    X, X_labels = sample_dataset_flatten_and_floatify(train_dataset, data_sample_size)
-    Y = np.zeros((len(X),len(classes)))
-    for i,x_label in enumerate(X_labels):
-        for j,c in enumerate(classes):
-            if type(x_label)==type(torch.Tensor(1)):
-                x_label = x_label.item() # make tensor with one entry to int
-            if str(x_label)==c:
-                Y[i][j] = 1
-
+    X, Y = sample_dataset(train_dataset, train_loader, data_sample_size)
 
     modelDefault = ReLUNet().to(device)
     modelReinit = ReLUNet().to(device)
     print("run ",run+1," of ",num_runs,": reinitialising")
-    c_reinit = reinitialise_ReLU_network(modelReinit, X, Y)
+    c_reinit = reinitialise_network(modelReinit, X, Y)
     print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 
     criterion = nn.CrossEntropyLoss()
