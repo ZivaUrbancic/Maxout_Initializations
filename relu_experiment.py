@@ -13,7 +13,6 @@ np.set_printoptions(threshold=np.inf)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-
 ###
 # Experiment hyperparameters
 ###
