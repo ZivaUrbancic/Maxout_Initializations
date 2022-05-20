@@ -372,41 +372,6 @@ def geometric_median(X, eps=1e-5):
             return y1
         y = y1
 
-
-
-
-# m = nn.Conv2d(3, 6, (2,3), stride=2)
-# h, w = m.kernel_size
-# c0 = w*h
-# crop_conv = nn.Conv2d(m.in_channels,
-#                       c0*m.in_channels,
-#                       m.kernel_size,
-#                       m.stride,
-#                       m.padding,
-#                       m.dilation,
-#                       m.groups,
-#                       False,
-#                       m.padding_mode)
-# W = torch.zeros(crop_conv.weight.size())
-
-# for channel in range(m.in_channels):
-#     for y in range(h):
-#         for x in range(w):
-#             W[channel*c0 + y*w + x, channel, y, x] = 1.
-
-# crop_conv.weight = nn.Parameter(W)
-
-# X_cropped = crop_conv(X)
-
-# for l in range(m.out_channels):
-#     W = []
-#     for k in range(m.in_channels):
-#         Wk = reinitialise_weights(X_cropped[k*c0 : (k+1)*c0])
-#         W += torch.reshape(Wk, (h,w))
-#     m.weight[l] = W
-
-# X_cropped = torch.tensor(Y)
-
 def reinitialise_network(model, X, Y, rescale_only = False):
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
@@ -600,3 +565,72 @@ def reinitialise_relu_layer(child, X, Y, R, C, rescale_only = False):
         X = np.amax([X,np.zeros(X.shape,dtype=X.dtype)], axis = 0)
 
     return X, R, C
+
+
+child = nn.Conv2d(3, 6, (2,3), stride=1)
+
+
+X = torch.zeros((2,3,10,10))
+for d in range(2):
+    for c in range(3):
+        for y in range(10):
+            for x in range(10):
+                X[d,c,y,x] = 1000*(d+1) + 100*c + 10*y +x
+                
+
+#def crop_conv2d(child, X):
+    
+# Crop the image to a space of dimension c0 = width * height of kernel
+h, w = child.kernel_size
+c0 = w*h
+
+# Use a new convolutional layer which copies the hyperparameters of
+# child but with weights that project the image onto the i,j th component
+crop_conv = nn.Conv2d(child.in_channels,
+                      c0 * child.in_channels,
+                      child.kernel_size,
+                      child.stride,
+                      child.padding,
+                      child.dilation,
+                      child.groups,
+                      False,
+                      child.padding_mode)
+W = torch.zeros(crop_conv.weight.size())
+for channel in range(child.in_channels):
+    for y in range(h):
+        for x in range(w):
+            W[channel*c0 + y*w + x, channel, y, x] = 1.
+
+crop_conv.weight = nn.Parameter(W)
+X_cropped = crop_conv(X).detach().numpy()
+
+# Find width and height of the image
+Width, Height = X.shape[-2:]
+
+# Initialise weights (and biases) for each out channel
+for l in range(child.out_channels):
+    W = []
+    for k in range(child.in_channels):
+        # Crop each image for each kernel translation, and put them all in
+        # one big list of length |X| * (W - w + 1) * (H - h + 1)
+        crops = []
+        for i in range(Height - h + 1):
+            for j in range(Width - w + 1):
+                for point in range(X.shape[0]):
+                    crops.append([X_cropped[point,k*c0 : (k+1)*c0][p,i,j]
+                           for p in range(c0)])
+        
+        # TODO ********:
+        
+        
+        # Reinitialise the weights (and biases) on this new dataset in R^c0
+        # Wk = reinitialise_weights(X_cropped[k*c0 : (k+1)*c0])
+        
+        # Reshape each c0 weight into a (w, h) vector
+        # W += Wk.reshape(-1,h,w)
+        
+    # child.weight[l] = W
+
+
+def reinitilise_conv2d_layer(child, X, Y, R, C, rescale_only = False):
+    pass

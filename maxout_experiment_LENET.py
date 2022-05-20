@@ -193,19 +193,19 @@ batch_size = 4
 train_dataset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                         download=True, transform=transform)
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size,
-                                          shuffle=True, num_workers=2)
+                                          shuffle=True)
 
 test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False,
                                        download=True, transform=transform)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,
-                                         shuffle=False, num_workers=2)
+                                         shuffle=False)
 
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 # get some random training images
-dataiter = iter(train_loader)
-images, labels = dataiter.next()
+# dataiter = iter(train_loader)
+# images, labels = dataiter.next()
 
 class Net(nn.Module):
     def __init__(self):
@@ -255,15 +255,7 @@ for run in range(num_runs):
                                                batch_size=batch_size,
                                                shuffle=True)
     #X, X_labels = sample_MNIST(train_dataset, 3000)
-    X, X_labels = sample_dataset(train_dataset, data_sample_size)
-    #Y = X_labels.long()
-    Y = np.zeros((len(X),len(classes)))
-    for i,x_label in enumerate(X_labels):
-        for j,c in enumerate(classes):
-            if type(x_label)==type(torch.Tensor(1)):
-                x_label = x_label.item() # make tensor with one entry to int
-            if str(x_label)==c:
-                Y[i][j] = 1
+    X, Y = sample_dataset(train_dataset, train_loader, data_sample_size)
 
     #modelDefault = MaxoutNet().to(device)
     #modelReinit = MaxoutNet().to(device)

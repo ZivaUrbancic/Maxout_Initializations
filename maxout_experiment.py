@@ -177,13 +177,13 @@ for run in range(num_runs):
     modelRescale = MaxoutNet().to(device)
     modelReinit = MaxoutNet().to(device)
     
+    reinitialise_network(modelRescale, X, Y, rescale_only = True)
+    modelRescale = modelRescale.to(device)
+    
     print("run ",run+1," of ",num_runs,": reinitialising")
     c_reinit = reinitialise_network(modelReinit, X, Y)
     modelReinit = modelReinit.to(device)
     print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
-    
-    reinitialise_network(modelRescale, X, Y, rescale_only = True)
-    modelRescale = modelRescale.to(device)
 
     criterion = nn.CrossEntropyLoss()
     optimizerDefault = torch.optim.SGD(modelDefault.parameters(), lr=learning_rate)
