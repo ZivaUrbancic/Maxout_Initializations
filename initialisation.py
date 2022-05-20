@@ -307,10 +307,11 @@ def fix_child_variance(child, X):
 # returns the cost of the k-th largest region (starting at 0)
 # returns -1 if k > #linear regions
 def k_th_largest_region_cost(C,k):
+    # If C is empty we jump straight to stage 2, by returning 0
+    if len(C) == 0:
+        return 0
     C[::-1].sort()
     return C[k]
-
-
 
 
 ###
@@ -406,9 +407,7 @@ def geometric_median(X, eps=1e-5):
 
 # X_cropped = torch.tensor(Y)
 
-
-
-def reinitialise_network(model, X, Y):
+def reinitialise_network(model, X, Y, rescale_only = False):
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
@@ -423,12 +422,12 @@ def reinitialise_network(model, X, Y):
         elif type(child)==torch.nn.modules.conv.Conv1d:
             print("Reinitialising layer ", l, " of type Conv1d")
             l += 1
-            X, R, C = reinitialise_conv1d_layer(child, X, Y, R, C)
+            X, R, C = reinitialise_conv1d_layer(child, X, Y, R, C, rescale_only)
 
         elif type(child)==torch.nn.modules.conv.Conv2d:
             print("Reinitialising layer ", l, " of type Conv2d")
             l += 1
-            X, R, C = reinitialise_conv2d_layer(child, X, Y, R, C)
+            X, R, C = reinitialise_conv2d_layer(child, X, Y, R, C, rescale_only)
 
         elif type(child)==torch.nn.modules.linear.Linear:
             if len(X.shape)>2:
@@ -438,28 +437,30 @@ def reinitialise_network(model, X, Y):
             l += 1
             if hasattr(model, 'maxout_rank'):
                 print("Reinitialising layer ", l, " of type Maxout")
-                X, R, C = reinitialise_maxout_layer(children[i:i+model.maxout_rank], X, Y, R, C)
+                X, R, C = reinitialise_maxout_layer(children[i:i+model.maxout_rank],
+                                                    X, Y, R, C, rescale_only)
                 skip = model.maxout_rank-1
             else:
                 print("Reinitialising layer ", l, " of type ReLU")
-                X, R, C = reinitialise_relu_layer(child, X, Y, R, C)
+                X, R, C = reinitialise_relu_layer(child, X, Y, R, C, rescale_only)
         else:
             print(type(child))
             # todo: check if layer supported, print warning if not
             continue
 
 
-def reinitialise_maxout_layer(children, X, Y, R, C):
+def reinitialise_maxout_layer(children, X, Y, R, C, rescale_only = False):
     maxout_rank = len(children)
     number_of_classes=max(Y)+1
     # step 0: check whether maxout_rank > number of regions
-    if k_th_largest_region_cost(C, maxout_rank-2) == -1:
-        stage = 0
-    elif k_th_largest_region_cost(C, maxout_rank-2) == 0:
+    
+    if k_th_largest_region_cost(C, maxout_rank-2) == 0 or rescale_only:
         stage = 2
+    elif k_th_largest_region_cost(C, maxout_rank - 2) == -1:
+        stage = 0
     else:
         stage = 1
-
+    
     # step 1: reintialise parameters
     for k in range(children[0].out_features):
         # stage 0:
@@ -528,13 +529,13 @@ def reinitialise_maxout_layer(children, X, Y, R, C):
     return X, R, C
 
 
-def reinitialise_relu_layer(child, X, Y, R, C):
+def reinitialise_relu_layer(child, X, Y, R, C, rescale_only = False):
     number_of_classes = len(set(Y))
     # step 0: check whether maxout_rank > number of regions
-    if k_th_largest_region_cost(C, 0) == -1:
-        stage = 0
-    elif k_th_largest_region_cost(C, 0) == 0:
+    if k_th_largest_region_cost(C, 0) == 0 or rescale_only:
         stage = 2
+    elif k_th_largest_region_cost(C, 0) == -1:
+        stage = 0
     else:
         stage = 1
 

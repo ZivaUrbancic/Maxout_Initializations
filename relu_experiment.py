@@ -147,16 +147,27 @@ for run in range(num_runs):
     X, Y = sample_dataset(train_dataset, train_loader, data_sample_size)
 
     modelDefault = ReLUNet().to(device)
+    modelRescale = ReLUNet().to(device)
     modelReinit = ReLUNet().to(device)
     print("run ",run+1," of ",num_runs,": reinitialising")
     c_reinit = reinitialise_network(modelReinit, X, Y)
     print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 
+    reinitialise_network(modelRescale, X, Y, rescale_only = True)
+    modelRescale = modelRescale.to(device)
+    
+    print("run ",run+1," of ",num_runs,": reinitialising")
+    c_reinit = reinitialise_network(modelReinit, X, Y)
+    modelReinit = modelReinit.to(device)
+    print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
+
     criterion = nn.CrossEntropyLoss()
     optimizerDefault = torch.optim.SGD(modelDefault.parameters(), lr=learning_rate)
+    optimizerRescale = torch.optim.SGD(modelRescale.parameters(), lr=learning_rate)
     optimizerReinit = torch.optim.SGD(modelReinit.parameters(), lr=learning_rate)
 
     log_loss_default = []
+    log_loss_rescale = []
     log_loss_reinit = []
 
     print("run ",run+1," of ",num_runs,": training")
@@ -169,6 +180,8 @@ for run in range(num_runs):
             # Forward pass
             outputsDefault = modelDefault(images)
             lossDefault = criterion(outputsDefault, labels)
+            outputsRescale = modelRescale(images)
+            lossRescale = criterion(outputsRescale, labels)
             outputsReinit = modelReinit(images)
             lossReinit = criterion(outputsReinit, labels)
 
@@ -176,6 +189,9 @@ for run in range(num_runs):
             optimizerDefault.zero_grad()
             lossDefault.backward()
             optimizerDefault.step()
+            optimizerRescale.zero_grad()
+            lossRescale.backward()
+            optimizerRescale.step()
             optimizerReinit.zero_grad()
             lossReinit.backward()
             optimizerReinit.step()
@@ -184,20 +200,25 @@ for run in range(num_runs):
 
                 with torch.no_grad():
                     n_correct_default = 0
+                    n_correct_rescale = 0
                     n_correct_reinit = 0
                     n_samples = 0
                     n_class_correct_default = [0 for i in range(10)]
+                    n_class_correct_rescale = [0 for i in range(10)]
                     n_class_correct_reinit = [0 for i in range(10)]
                     n_class_samples = [0 for i in range(10)]
                     for images, labels in test_loader:
                         images = images.to(device)
                         labels = labels.to(device)
                         outputsDefault = modelDefault(images)
+                        outputsRescale = modelRescale(images)
                         outputsReinit = modelReinit(images)
                         _, predictedDefault = torch.max(outputsDefault, 1)
+                        _, predictedRescale = torch.max(outputsRescale, 1)
                         _, predictedReinit = torch.max(outputsReinit, 1)
                         n_samples += labels.size(0)
                         n_correct_default += (predictedDefault == labels).sum().item()
+                        n_correct_rescale += (predictedRescale == labels).sum().item()
                         n_correct_reinit += (predictedReinit == labels).sum().item()
 
                         for j in range(labels.size(0)):
@@ -205,17 +226,24 @@ for run in range(num_runs):
                             pred_default = predictedDefault[j]
                             if (label == pred_default):
                                 n_class_correct_default[label] += 1
+                            pred_rescale = predictedRescale[j]
+                            if (label == pred_rescale):
+                                n_class_correct_rescale[label] += 1
                             pred_reinit = predictedReinit[j]
                             if (label == pred_reinit):
                                 n_class_correct_reinit[label] += 1
                             n_class_samples[label] += 1
 
                     acc_default = [100 * n_correct_default / n_samples]
+                    acc_rescale = [100 * n_correct_rescale / n_samples]
                     acc_reinit = [100 * n_correct_reinit / n_samples]
                     acc_default += [n_class_correct_default[j] / n_class_samples[j] for j in range(10)]
+                    acc_rescale += [n_class_correct_rescale[j] / n_class_samples[j] for j in range(10)]
                     acc_reinit += [n_class_correct_reinit[j] / n_class_samples[j] for j in range(10)]
 
                     print([[run,epoch,i],[lossDefault.item()]],file=open(str(experiment_number)+"_loss_default.log",'+a'))
+                    print([[run,epoch,i],[lossRescale.item()]],file=open(str(experiment_number)+"_loss_rescale.log",'+a'))
                     print([[run,epoch,i],[lossReinit.item()]],file=open(str(experiment_number)+"_loss_reinit.log",'+a'))
                     print([[run,epoch,i],acc_default],file=open(str(experiment_number)+"_acc_default.log",'+a'))
-                    print([[run,epoch,i],acc_reinit],file=open(str(experiment_number)+"_acc_reinit.log",'+a'))
+                    print([[run,epoch,i],acc_rescale],file=open(str(experiment_number)+"_acc_rescale.log",'+a'))
+                    print([[run,epoch,i],acc_reinit],file=open(str(experiment_number)+"_acc_reinit.log",'+a'))    
