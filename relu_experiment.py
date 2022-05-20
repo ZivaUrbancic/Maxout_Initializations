@@ -17,8 +17,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 6
-num_epochs = 2
+num_runs = 12
+num_epochs = 6
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
@@ -148,13 +148,10 @@ for run in range(num_runs):
     modelDefault = ReLUNet().to(device)
     modelRescale = ReLUNet().to(device)
     modelReinit = ReLUNet().to(device)
-    print("run ",run+1," of ",num_runs,": reinitialising")
-    c_reinit = reinitialise_network(modelReinit, X, Y)
-    print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 
     reinitialise_network(modelRescale, X, Y, rescale_only = True)
     modelRescale = modelRescale.to(device)
-    
+
     print("run ",run+1," of ",num_runs,": reinitialising")
     c_reinit = reinitialise_network(modelReinit, X, Y)
     modelReinit = modelReinit.to(device)
@@ -245,4 +242,4 @@ for run in range(num_runs):
                     print([[run,epoch,i],[lossReinit.item()]],file=open(str(experiment_number)+"_loss_reinit.log",'+a'))
                     print([[run,epoch,i],acc_default],file=open(str(experiment_number)+"_acc_default.log",'+a'))
                     print([[run,epoch,i],acc_rescale],file=open(str(experiment_number)+"_acc_rescale.log",'+a'))
-                    print([[run,epoch,i],acc_reinit],file=open(str(experiment_number)+"_acc_reinit.log",'+a'))    
+                    print([[run,epoch,i],acc_reinit],file=open(str(experiment_number)+"_acc_reinit.log",'+a'))

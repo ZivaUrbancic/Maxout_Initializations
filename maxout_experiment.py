@@ -18,12 +18,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 1
-num_epochs = 2
+num_runs = 12
+num_epochs = 6
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
-network_size = "small" # "small" or "large"
+network_size = "large" # "small" or "large"
 network_rank = 3 # WARNING: does not change network below, adjust by hand
 
 
@@ -176,10 +176,10 @@ for run in range(num_runs):
     modelDefault = MaxoutNet().to(device)
     modelRescale = MaxoutNet().to(device)
     modelReinit = MaxoutNet().to(device)
-    
+
     reinitialise_network(modelRescale, X, Y, rescale_only = True)
     modelRescale = modelRescale.to(device)
-    
+
     print("run ",run+1," of ",num_runs,": reinitialising")
     c_reinit = reinitialise_network(modelReinit, X, Y)
     modelReinit = modelReinit.to(device)
