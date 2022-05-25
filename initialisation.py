@@ -589,7 +589,7 @@ Y = np.random.randint(0,5,20)
 def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
                               rescale_only = False):
     
-    if not R == False and C == False:
+    if type(R) != bool or type(C) != bool:
         print('Unsupported: R or C specified for conv2d layer')
         
     # Crop the image to a space of dimension c0 = width * height of kernel
@@ -598,23 +598,35 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
     
     # Use a new convolutional layer which copies the hyperparameters of
     # child but with weights that project the image onto the i,j th component
+    print(type(child.in_channels),
+          type(c0 * child.in_channels),
+          child.kernel_size,
+          child.stride,
+          child.padding,
+          child.dilation,
+          type(child.groups),
+          type(child.padding_mode))
     crop_conv = nn.Conv2d(child.in_channels,
                           c0 * child.in_channels,
                           child.kernel_size,
-                          child.stride,
-                          child.padding,
-                          child.dilation,
-                          child.groups,
-                          False,
-                          child.padding_mode)
-    W = torch.zeros(crop_conv.weight.size())
+                          stride = child.stride,
+                          padding = child.padding,
+                          dilation = child.dilation,
+                          groups = child.groups,
+                          bias = False,
+                          padding_mode = child.padding_mode)
+    W = torch.zeros(crop_conv.weight.shape)
     for channel in range(child.in_channels):
         for y in range(h):
             for x in range(w):
                 W[channel*c0 + y*w + x, channel, y, x] = 1.
     
-    crop_conv.weight = nn.Parameter(W)
-    X_cropped = crop_conv(X).detach().numpy()
+    #print("crop_conv: ", crop_conv.weight.shape, ", W :", W.shape)
+    #crop_conv.weight = nn.Parameter(W)
+    print("child: ", child)
+    #print("X:", type(X))
+    with torch.no_grad():
+        X_cropped = crop_conv(torch.tensor(X)).numpy()
     
     # Find width and height of the image
     Width, Height = X.shape[-2:]
