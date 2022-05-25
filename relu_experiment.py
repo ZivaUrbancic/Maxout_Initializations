@@ -17,7 +17,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 12
+num_runs = 2
 num_epochs = 6
 batch_size = 100
 learning_rate = 0.001
@@ -124,6 +124,26 @@ class ReLUNet(nn.Module):
         x = output_normalisation(self.layer3(x))
         return x
 
+class ReLUBatchNormNet(nn.Module):
+    def __init__(self):
+        super(ReLUBatchNormNet, self).__init__()
+        self.layer1 = nn.Linear(n0, n1)
+        self.layer2 = nn.Linear(n1, n2)
+        self.layer3 = nn.Linear(n2, n3)
+        self.bn1 = nn.BatchNorm1d(n1)
+        self.bn2 = nn.BatchNorm1d(n2)
+
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        x = self.layer1(x)
+        x = activation(self.bn1(x))
+        x = self.layer2(x)
+        x = activation(self.bn2(x))
+        x = output_normalisation(self.layer3(x))
+        return x
+
+
 
 ###
 # Running experiments
@@ -145,15 +165,15 @@ for run in range(num_runs):
                                                shuffle=True)
     X, Y = sample_dataset(train_dataset, train_loader, data_sample_size)
 
-    modelDefault = ReLUNet().to(device)
-    modelRescale = ReLUNet().to(device)
-    modelReinit = ReLUNet().to(device)
+    modelDefault = ReLUBatchNormNet().to(device) # no reinit + batchnorm
+    modelRescale = ReLUBatchNormNet().to(device) # reinit + batchnorm
+    modelReinit = ReLUNet().to(device) # reinit + our rescaling
 
-    reinitialise_network(modelRescale, X, Y, rescale_only = True)
+    reinitialise_network(modelRescale, X, Y, adjust_regions = True, adjust_variance = False)
     modelRescale = modelRescale.to(device)
 
     print("run ",run+1," of ",num_runs,": reinitialising")
-    c_reinit = reinitialise_network(modelReinit, X, Y)
+    c_reinit = reinitialise_network(modelReinit, X, Y, adjust_regions = True, adjust_variance = True)
     modelReinit = modelReinit.to(device)
     print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 

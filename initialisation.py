@@ -373,7 +373,7 @@ def geometric_median(X, eps=1e-5):
             return y1
         y = y1
 
-def reinitialise_network(model, X, Y, rescale_only = False):
+def reinitialise_network(model, X, Y, adjust_regions = True, adjust_variance = True):
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
@@ -388,12 +388,12 @@ def reinitialise_network(model, X, Y, rescale_only = False):
         elif type(child)==torch.nn.modules.conv.Conv1d:
             print("Reinitialising layer ", l, " of type Conv1d")
             l += 1
-            X, R, C = reinitialise_conv1d_layer(child, X, Y, R, C, rescale_only)
+            X, R, C = reinitialise_conv1d_layer(child, X, Y, R, C, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
 
         elif type(child)==torch.nn.modules.conv.Conv2d:
             print("Reinitialising layer ", l, " of type Conv2d")
             l += 1
-            X, R, C = reinitialise_conv2d_layer(child, X, Y, R, C, rescale_only)
+            X, R, C = reinitialise_conv2d_layer(child, X, Y, R, C, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
 
         elif type(child)==torch.nn.modules.linear.Linear:
             if len(X.shape)>2:
@@ -404,35 +404,35 @@ def reinitialise_network(model, X, Y, rescale_only = False):
             if hasattr(model, 'maxout_rank'):
                 print("Reinitialising layer ", l, " of type Maxout")
                 X, R, C = reinitialise_maxout_layer(children[i:i+model.maxout_rank],
-                                                    X, Y, R, C, rescale_only)
+                                                    X, Y, R, C, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
                 skip = model.maxout_rank-1
             else:
                 print("Reinitialising layer ", l, " of type ReLU")
-                X, R, C = reinitialise_relu_layer(child, X, Y, R, C, rescale_only)
+                X, R, C = reinitialise_relu_layer(child, X, Y, R, C, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
         else:
             print(type(child))
             # todo: check if layer supported, print warning if not
             continue
 
 
-def reinitialise_maxout_layer(children, X, Y, R, C, rescale_only = False):
+def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjust_variance = True):
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
         assert R == False and C == False
         R = initialise_region_matrix(N)
         C = initialise_costs_vector(N)
-    
+
     maxout_rank = len(children)
     number_of_classes=max(Y)+1
     # step 0: check whether maxout_rank > number of regions
-    
-    if k_th_largest_region_cost(C, maxout_rank-2) == 0 or rescale_only:
+
+    if k_th_largest_region_cost(C, maxout_rank-2) == 0 or adjust_regions == False:
         stage = 2
     elif k_th_largest_region_cost(C, maxout_rank - 2) == -1:
         stage = 0
     else:
         stage = 1
-    
+
     # step 1: reintialise parameters
     for k in range(children[0].out_features):
         # stage 0:
@@ -485,13 +485,14 @@ def reinitialise_maxout_layer(children, X, Y, R, C, rescale_only = False):
 
     # step 3: adjust weights to control variance and forward X
     # compute image of the dataset under the current parameters:
-    with torch.no_grad():
-        Xtemp = np.amax([child(torch.tensor(X)).numpy() for child in children],
+    if adjust_variance == True:
+        with torch.no_grad():
+            Xtemp = np.amax([child(torch.tensor(X)).numpy() for child in children],
                             axis = 0)
 
-    # adjust weights and biases to control the variance:
-    for child in children:
-        fix_child_variance(child, Xtemp)
+        # adjust weights and biases to control the variance:
+        for child in children:
+            fix_child_variance(child, Xtemp)
 
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
@@ -501,17 +502,17 @@ def reinitialise_maxout_layer(children, X, Y, R, C, rescale_only = False):
     return X, R, C
 
 
-def reinitialise_relu_layer(child, X, Y, R = False, C = False, rescale_only = False):
-    
+def reinitialise_relu_layer(child, X, Y, R = False, C = False, adjust_regions = True, adjust_variance = True):
+
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
         assert R == False and C == False
         R = initialise_region_matrix(N)
         C = initialise_costs_vector(N)
-    
+
     number_of_classes = len(set(Y))
     # step 0: check whether maxout_rank > number of regions
-    if k_th_largest_region_cost(C, 0) == 0 or rescale_only:
+    if k_th_largest_region_cost(C, 0) == 0 or adjust_regions == False:
         stage = 2
     elif k_th_largest_region_cost(C, 0) == -1:
         stage = 0
@@ -566,11 +567,12 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, rescale_only = Fa
 
     # step 3: adjust weights to control variance and forward X
     # compute image of the dataset under the current parameters:
-    with torch.no_grad():
-        Xtemp = nn.ReLU()(child(torch.tensor(X))).numpy()
-    
-    # adjust weights and biases to control the variance:
-    fix_child_variance(child, Xtemp)
+    if adjust_variance == True:
+        with torch.no_grad():
+            Xtemp = nn.ReLU()(child(torch.tensor(X))).numpy()
+
+        # adjust weights and biases to control the variance:
+        fix_child_variance(child, Xtemp)
 
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
@@ -589,28 +591,23 @@ for d in range(20):
         for y in range(10):
             for x in range(10):
                 X[d,c,y,x] = 1000*(d+1) + 100*c + 10*y +x
-Y = np.random.randint(0,5,20)                
+Y = np.random.randint(0,5,20)
 
 def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
-                              rescale_only = False):
-    
+                              adjust_regions = True, adjust_variance = True):
+
     if type(R) != bool or type(C) != bool:
         print('Unsupported: R or C specified for conv2d layer')
-        
+
+    if adjust_regions == False and adjust_variance == False:
+        return X, R, C
+
     # Crop the image to a space of dimension c0 = width * height of kernel
     h, w = child.kernel_size
     c0 = w*h
-    
+
     # Use a new convolutional layer which copies the hyperparameters of
     # child but with weights that project the image onto the i,j th component
-    print(type(child.in_channels),
-          type(c0 * child.in_channels),
-          child.kernel_size,
-          child.stride,
-          child.padding,
-          child.dilation,
-          type(child.groups),
-          type(child.padding_mode))
     crop_conv = nn.Conv2d(child.in_channels,
                           c0 * child.in_channels,
                           child.kernel_size,
@@ -625,21 +622,15 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
         for y in range(h):
             for x in range(w):
                 W[channel*c0 + y*w + x, channel, y, x] = 1.
-    
-    #print("crop_conv: ", crop_conv.weight.shape, ", W :", W.shape)
-    #crop_conv.weight = nn.Parameter(W)
-    print("child: ", child)
-    #print("X:", type(X))
+
     with torch.no_grad():
-        print("in torch.no_grad")
         X_cropped = crop_conv(torch.tensor(X)).numpy()
-        print("in torch.no_grad")
-    
+
     # Find width and height of the image
     Width, Height = X.shape[-2:]
-    
+
     X_ = []
-    
+
     # Crop the images to the shape of the kernel (for each out channel)
     for k in range(child.in_channels):
         # Crop each image for each kernel translation, and put them all in
@@ -650,20 +641,20 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
                 for point in range(X.shape[0]):
                     crops.append([X_cropped[point,k*c0 : (k+1)*c0][p,i,j]
                            for p in range(c0)])
-        
+
         X_.append(crops)
-    
+
     # Create reshaped X and Y data for the new cropped images
     X_ = np.concatenate(X_, axis = 1)
     Y_ = np.tile(Y, (Height - h + 1)*(Width - w + 1))
-    
+
     # Create a linear ReLU layer and reinitialise with the cropped data
     c0_child = nn.Linear(c0*child.in_channels, child.out_channels)
     c0_child.weight = nn.Parameter(child.weight.reshape(child.out_channels,
                                                         c0*child.in_channels))
     c0_child.bias = child.bias
-    reinitialise_relu_layer(c0_child, X_, Y_, rescale_only = rescale_only)
-    
+    reinitialise_relu_layer(c0_child, X_, Y_, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
+
     # Reshape the reinitialised weights as a convolutional weight tensor
     # and use as weights for the original child
     reshaped_weights = c0_child.weight.reshape(child.weight.shape)
@@ -675,4 +666,3 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
         X = nn.ReLU()(child(torch.tensor(X))).numpy()
 
     return X, R, C
-    

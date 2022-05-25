@@ -19,12 +19,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ###
 experiment_number = random.randint(0,999999999)
 num_runs = 12
-num_epochs = 6
+num_epochs = 12
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
 network_size = "large" # "small" or "large"
-network_rank = 3 # WARNING: does not change network below, adjust by hand
+network_rank = 7 # WARNING: does not change network below, adjust by hand
 
 
 
@@ -118,33 +118,137 @@ class MaxoutNet(nn.Module):
         self.lay1lin1 = nn.Linear(n0, n1)
         self.lay1lin2 = nn.Linear(n0, n1)
         self.lay1lin3 = nn.Linear(n0, n1)
+        self.lay1lin4 = nn.Linear(n0, n1)
+        self.lay1lin5 = nn.Linear(n0, n1)
+        self.lay1lin6 = nn.Linear(n0, n1)
+        self.lay1lin7 = nn.Linear(n0, n1)
         self.lay2lin1 = nn.Linear(n1, n2)
         self.lay2lin2 = nn.Linear(n1, n2)
         self.lay2lin3 = nn.Linear(n1, n2)
+        self.lay2lin4 = nn.Linear(n1, n2)
+        self.lay2lin5 = nn.Linear(n1, n2)
+        self.lay2lin6 = nn.Linear(n1, n2)
+        self.lay2lin7 = nn.Linear(n1, n2)
         self.lay3lin1 = nn.Linear(n2, n3)
         self.lay3lin2 = nn.Linear(n2, n3)
         self.lay3lin3 = nn.Linear(n2, n3)
-        self.maxout_rank = 3
+        self.lay3lin4 = nn.Linear(n2, n3)
+        self.lay3lin5 = nn.Linear(n2, n3)
+        self.lay3lin6 = nn.Linear(n2, n3)
+        self.lay3lin7 = nn.Linear(n2, n3)
+        self.maxout_rank = 7
 
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
         x = x.unsqueeze(0) # make vector of length n0 into 1*n0 matrix
-        X = torch.cat( (self.lay1lin1(x),self.lay1lin2(x),self.lay1lin3(x)), 0)
+        X = torch.cat( (self.lay1lin1(x),
+                        self.lay1lin2(x),
+                        self.lay1lin3(x),
+                        self.lay1lin4(x),
+                        self.lay1lin5(x),
+                        self.lay1lin6(x),
+                        self.lay1lin7(x)), 0)
               # concatenate output vectors into matrix (row-wise by default)
               # size: rank * width layer 1
         x,dummy = torch.max(X,0)
               # go through each column and compute max
               # size: 1 * width layer 1
         x = x.unsqueeze(0)
-        X = torch.cat( (self.lay2lin1(x),self.lay2lin2(x),self.lay2lin3(x)), 0)
+        X = torch.cat( (self.lay2lin1(x),
+                        self.lay2lin2(x),
+                        self.lay2lin3(x),
+                        self.lay2lin4(x),
+                        self.lay2lin5(x),
+                        self.lay2lin6(x),
+                        self.lay2lin7(x)), 0)
               # concatenate output vectors into matrix (row-wise by default)
               # size: rank * width layer 2
         x,dummy = torch.max(X,0)
               # go through each column and compute max
               # size: 1 * width layer 2
         x = x.unsqueeze(0)
-        X = torch.cat( (self.lay3lin1(x),self.lay3lin2(x),self.lay3lin3(x)), 0)
+        X = torch.cat( (self.lay3lin1(x),
+                        self.lay3lin2(x),
+                        self.lay3lin3(x),
+                        self.lay3lin4(x),
+                        self.lay3lin5(x),
+                        self.lay3lin6(x),
+                        self.lay3lin7(x)), 0)
+              # concatenate output vectors into matrix (row-wise by default)
+              # size: rank * width layer 2
+        x,dummy = torch.max(X,0)
+              # go through each column and compute max
+              # size: 1 * width layer 2
+        # x = mySoftmax(x) # wth does this make loss worse?
+        return x
+
+class MaxoutBatchnormNet(nn.Module):
+    def __init__(self):
+        super(MaxoutBatchnormNet, self).__init__()
+        self.lay1lin1 = nn.Linear(n0, n1)
+        self.lay1lin2 = nn.Linear(n0, n1)
+        self.lay1lin3 = nn.Linear(n0, n1)
+        self.lay1lin4 = nn.Linear(n0, n1)
+        self.lay1lin5 = nn.Linear(n0, n1)
+        self.lay1lin6 = nn.Linear(n0, n1)
+        self.lay1lin7 = nn.Linear(n0, n1)
+        self.lay2lin1 = nn.Linear(n1, n2)
+        self.lay2lin2 = nn.Linear(n1, n2)
+        self.lay2lin3 = nn.Linear(n1, n2)
+        self.lay2lin4 = nn.Linear(n1, n2)
+        self.lay2lin5 = nn.Linear(n1, n2)
+        self.lay2lin6 = nn.Linear(n1, n2)
+        self.lay2lin7 = nn.Linear(n1, n2)
+        self.lay3lin1 = nn.Linear(n2, n3)
+        self.lay3lin2 = nn.Linear(n2, n3)
+        self.lay3lin3 = nn.Linear(n2, n3)
+        self.lay3lin4 = nn.Linear(n2, n3)
+        self.lay3lin5 = nn.Linear(n2, n3)
+        self.lay3lin6 = nn.Linear(n2, n3)
+        self.lay3lin7 = nn.Linear(n2, n3)
+        self.bn1 = nn.BatchNorm1d(n1)
+        self.bn2 = nn.BatchNorm1d(n2)
+        self.bn3 = nn.BatchNorm1d(n3)
+        self.maxout_rank = 7
+
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        x = x.unsqueeze(0) # make vector of length n0 into 1*n0 matrix
+        X = torch.cat( (self.bn1(self.lay1lin1(x)),
+                        self.bn1(self.lay1lin2(x)),
+                        self.bn1(self.lay1lin3(x)),
+                        self.bn1(self.lay1lin4(x)),
+                        self.bn1(self.lay1lin5(x)),
+                        self.bn1(self.lay1lin6(x)),
+                        self.bn1(self.lay1lin7(x))), 0)
+              # concatenate output vectors into matrix (row-wise by default)
+              # size: rank * width layer 1
+        x,dummy = torch.max(X,0)
+              # go through each column and compute max
+              # size: 1 * width layer 1
+        x = x.unsqueeze(0)
+        X = torch.cat( (self.bn2(self.lay2lin1(x)),
+                        self.bn2(self.lay2lin2(x)),
+                        self.bn2(self.lay2lin3(x)),
+                        self.bn2(self.lay2lin4(x)),
+                        self.bn2(self.lay2lin5(x)),
+                        self.bn2(self.lay2lin6(x)),
+                        self.bn2(self.lay2lin7(x))), 0)
+              # concatenate output vectors into matrix (row-wise by default)
+              # size: rank * width layer 2
+        x,dummy = torch.max(X,0)
+              # go through each column and compute max
+              # size: 1 * width layer 2
+        x = x.unsqueeze(0)
+        X = torch.cat( (self.bn3(self.lay3lin1(x)),
+                        self.bn3(self.lay3lin2(x)),
+                        self.bn3(self.lay3lin3(x)),
+                        self.bn3(self.lay3lin4(x)),
+                        self.bn3(self.lay3lin5(x)),
+                        self.bn3(self.lay3lin6(x)),
+                        self.bn3(self.lay3lin7(x))), 0)
               # concatenate output vectors into matrix (row-wise by default)
               # size: rank * width layer 2
         x,dummy = torch.max(X,0)
@@ -173,15 +277,18 @@ for run in range(num_runs):
                                                shuffle=True)
     X, Y = sample_dataset(train_dataset, train_loader, data_sample_size)
 
-    modelDefault = MaxoutNet().to(device)
-    modelRescale = MaxoutNet().to(device)
-    modelReinit = MaxoutNet().to(device)
+    modelDefault = MaxoutBatchnormNet().to(device) # batchnorm only
+    modelRescale = MaxoutNet().to(device)          # rescale only
+    modelReinit = MaxoutBatchnormNet().to(device)  # rescale + batchnorm
 
-    reinitialise_network(modelRescale, X, Y, rescale_only = True)
+    reinitialise_network(modelDefault, X, Y, adjust_regions = True, adjust_variance = False)
+    modelDefault = modelDefault.to(device)
+
+    reinitialise_network(modelRescale, X, Y, adjust_regions = True, adjust_variance = True)
     modelRescale = modelRescale.to(device)
 
     print("run ",run+1," of ",num_runs,": reinitialising")
-    c_reinit = reinitialise_network(modelReinit, X, Y)
+    c_reinit = reinitialise_network(modelReinit, X, Y, adjust_regions = True, adjust_variance = True)
     modelReinit = modelReinit.to(device)
     print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 
