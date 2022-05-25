@@ -416,6 +416,12 @@ def reinitialise_network(model, X, Y, rescale_only = False):
 
 
 def reinitialise_maxout_layer(children, X, Y, R, C, rescale_only = False):
+    if type(R) == bool or type(C) == bool:
+        N = X.shape[0] # number of data points
+        assert R == False and C == False
+        R = initialise_region_matrix(N)
+        C = initialise_costs_vector(N)
+    
     maxout_rank = len(children)
     number_of_classes=max(Y)+1
     # step 0: check whether maxout_rank > number of regions
@@ -497,9 +503,8 @@ def reinitialise_maxout_layer(children, X, Y, R, C, rescale_only = False):
 
 def reinitialise_relu_layer(child, X, Y, R = False, C = False, rescale_only = False):
     
-    N = X.shape[0] # number of data points
-    
-    if R == False or C == False:
+    if type(R) == bool or type(C) == bool:
+        N = X.shape[0] # number of data points
         assert R == False and C == False
         R = initialise_region_matrix(N)
         C = initialise_costs_vector(N)
@@ -626,7 +631,9 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
     print("child: ", child)
     #print("X:", type(X))
     with torch.no_grad():
+        print("in torch.no_grad")
         X_cropped = crop_conv(torch.tensor(X)).numpy()
+        print("in torch.no_grad")
     
     # Find width and height of the image
     Width, Height = X.shape[-2:]

@@ -57,7 +57,7 @@ elif dataset=="CIFAR10" and network_size=="large":
     n1 = 32
     n2 = 16
     n3 = 10 # = size of output
-    data_sample_size = 3000
+    data_sample_size = 10
 else:
     raise NameError("unsupported dataset or size")
 
