@@ -105,10 +105,8 @@ def regions(X, functions):
     reg = []
 
     for x in X:
-        vals = np.zeros(len(functions)); # making vals np.array to speed up np.argmax
-        for i,f in enumerate(functions):
-            vals[i] = f(x)
-        reg += [np.argmax(vals)]
+        vals = np.array([f(x) for f in functions])
+        reg.append(np.argmax(vals))
 
     return reg
 
@@ -148,6 +146,21 @@ def CE_region_cost(indices, Y, number_of_classes):
 #print(CE_region_cost(indices, Y, 3))
 
 def regions_from_costs(costs):
+    '''
+    Read cost vector and identify the start points of the regions. Return a
+    list of pairs [s_i, s_{i+1}] of start points of consecutive regions.
+
+    Parameters
+    ----------
+    costs : np array
+        Cost vector.
+
+    Returns
+    -------
+    list
+        List of pairs of start indices of consecutive regions.
+
+    '''
 
     region_start_points = []
     for n, c in enumerate(costs):
@@ -180,11 +193,52 @@ def regions_from_matrix(R):
 
 def update_regions_and_costs(R, C, functions, X, Y,
                              region_cost, number_of_classes):
+    '''
+    Update the regions matrix and cost vector. Take a list of functions of
+    length maxout_rank (or 2 in the ReLU case where the first is the zero
+    function) and decide which function is maximal at each point x. This gives
+    a vector of indices which is appended as the penultimate column of the
+    region matrix. We also recompute the costs for the regions and update the
+    cost vector to include these.
 
-    sorted_X = X[R[:,-1]]
+    Parameters
+    ----------
+    R : np array
+        Region matrix.
+    C : np array
+        Cost vector.
+    functions : list
+        List of functions R^n -> R.
+    X : np array
+        Data set N x n.
+    Y : np array
+        Data labels.
+    region_cost : function
+        Region cost function.
+    number_of_classes : int
+        The number of classes from which Y is drawn, in the case of multi-class
+        classification.
+
+    Returns
+    -------
+    R : np array
+        Updated regions matrix.
+    C : np array
+        Updated cost vector.
+
+    '''
+    
+    
+    # Sort X according to the order given by the indices in the reion matrix,
+    # to associate each data point to its region. Compute the index of the
+    # function which is maximal at x.
+
+    
+    indices = R[:,-1]
+    sorted_X = X[indices]
     regs = np.array(regions(sorted_X, functions)).reshape(-1,1)
 
-    indices = R[:, -1].reshape(-1,1)
+    indices = indices.reshape(-1,1)
 
     before_regions = regions_from_costs(C)
 
@@ -216,7 +270,7 @@ def update_regions_and_costs(R, C, functions, X, Y,
 
 
 def hyperplanes_through_largest_regions(X, R, C,
-                                        maxout = None):
+                                        maxout = None, w = None):
 
     if maxout == None:
         rank = 2
@@ -231,7 +285,8 @@ def hyperplanes_through_largest_regions(X, R, C,
     #k = min(X.shape[1], len(sorted_region_indices))
 
     #medians = []
-    w = np.random.normal(size = X.shape[1])
+    if w is None:
+        w = np.random.normal(size = X.shape[1])
     splits = []
 
     for i in range(rank - 1):
@@ -596,70 +651,121 @@ Y = np.random.randint(0,5,20)
 def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
                               adjust_regions = True, adjust_variance = True):
 
-    if type(R) != bool or type(C) != bool:
-        print('Unsupported: R or C specified for conv2d layer')
+    if type(R) == bool or type(C) == bool:
+        N = X.shape[0] # number of data points
+        assert R == False and C == False
+        R = initialise_region_matrix(N)
+        C = initialise_costs_vector(N)
 
     if adjust_regions == False and adjust_variance == False:
         return X, R, C
 
-    # Crop the image to a space of dimension c0 = width * height of kernel
-    h, w = child.kernel_size
-    c0 = w*h
+    child1 = nn.Conv2d(child.in_channels,
+                       child.out_channels,
+                       child.kernel_size,
+                       child.stride,
+                       child.padding,
+                       child.dilation,
+                       child.groups,
+                       False,
+                       child.padding_mode)
+    
+    X1 = child1(X).detach().numpy()
+    X2 = X1.mean(axis = (-2,-1))
+    
+    number_of_classes = len(set(Y))
+    # step 0: check whether maxout_rank > number of regions
+    if k_th_largest_region_cost(C, 0) == 0 or adjust_regions == False:
+        stage = 2
+    else:
+        stage = 1
+        
+    unit_vecs = np.eye(child.out_channels)
 
-    # Use a new convolutional layer which copies the hyperparameters of
-    # child but with weights that project the image onto the i,j th component
-    crop_conv = nn.Conv2d(child.in_channels,
-                          c0 * child.in_channels,
-                          child.kernel_size,
-                          stride = child.stride,
-                          padding = child.padding,
-                          dilation = child.dilation,
-                          groups = child.groups,
-                          bias = False,
-                          padding_mode = child.padding_mode)
-    W = torch.zeros(crop_conv.weight.shape)
-    for channel in range(child.in_channels):
-        for y in range(h):
-            for x in range(w):
-                W[channel*c0 + y*w + x, channel, y, x] = 1.
+    # step 1: reintialise parameters
+    for k in range(child.out_channels):
+        # stage 1:
+        # use special reinitialisation routines until regions fall
+        # below certain size
+        if stage == 1:
+            print("reinitialising channel ", k)
+            wb = hyperplanes_through_largest_regions(X2, R, C, w = unit_vecs[k])
+            R, C = update_regions_and_costs(R, C,
+                                            [linear(wbj) for wbj in wb],
+                                            X2, Y, CE_region_cost,
+                                            number_of_classes)
+            with torch.no_grad():
+                child.bias[k] = nn.Parameter(torch.tensor(wb[1][-1]))
 
-    with torch.no_grad():
-        X_cropped = crop_conv(torch.tensor(X)).numpy()
+            if k_th_largest_region_cost(C, 0) == 0:
+                stage = 2
 
-    # Find width and height of the image
-    Width, Height = X.shape[-2:]
+        # stage 2:
+        # all regions have cost 0, keep remaining parameters
+        elif stage == 2:
+            print("keeping channel ", k, " onwards")
+            R = []
+            C = []
+            break
 
-    X_ = []
+    # # Crop the image to a space of dimension c0 = width * height of kernel
+    # h, w = child.kernel_size
+    # c0 = w*h
 
-    # Crop the images to the shape of the kernel (for each out channel)
-    for k in range(child.in_channels):
-        # Crop each image for each kernel translation, and put them all in
-        # one big list of length |X| * (W - w + 1) * (H - h + 1)
-        crops = []
-        for i in range(Height - h + 1):
-            for j in range(Width - w + 1):
-                for point in range(X.shape[0]):
-                    crops.append([X_cropped[point,k*c0 : (k+1)*c0][p,i,j]
-                           for p in range(c0)])
+    # # Use a new convolutional layer which copies the hyperparameters of
+    # # child but with weights that project the image onto the i,j th component
+    # crop_conv = nn.Conv2d(child.in_channels,
+    #                       c0 * child.in_channels,
+    #                       child.kernel_size,
+    #                       stride = child.stride,
+    #                       padding = child.padding,
+    #                       dilation = child.dilation,
+    #                       groups = child.groups,
+    #                       bias = False,
+    #                       padding_mode = child.padding_mode)
+    # W = torch.zeros(crop_conv.weight.shape)
+    # for channel in range(child.in_channels):
+    #     for y in range(h):
+    #         for x in range(w):
+    #             W[channel*c0 + y*w + x, channel, y, x] = 1.
 
-        X_.append(crops)
+    # with torch.no_grad():
+    #     X_cropped = crop_conv(torch.tensor(X)).numpy()
 
-    # Create reshaped X and Y data for the new cropped images
-    X_ = np.concatenate(X_, axis = 1)
-    Y_ = np.tile(Y, (Height - h + 1)*(Width - w + 1))
+    # # Find width and height of the image
+    # Width, Height = X.shape[-2:]
 
-    # Create a linear ReLU layer and reinitialise with the cropped data
-    c0_child = nn.Linear(c0*child.in_channels, child.out_channels)
-    c0_child.weight = nn.Parameter(child.weight.reshape(child.out_channels,
-                                                        c0*child.in_channels))
-    c0_child.bias = child.bias
-    reinitialise_relu_layer(c0_child, X_, Y_, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
+    # X_ = []
 
-    # Reshape the reinitialised weights as a convolutional weight tensor
-    # and use as weights for the original child
-    reshaped_weights = c0_child.weight.reshape(child.weight.shape)
-    child.weight = nn.Parameter(reshaped_weights)
-    child.bias = c0_child.bias
+    # # Crop the images to the shape of the kernel (for each out channel)
+    # for k in range(child.in_channels):
+    #     # Crop each image for each kernel translation, and put them all in
+    #     # one big list of length |X| * (W - w + 1) * (H - h + 1)
+    #     crops = []
+    #     for i in range(Height - h + 1):
+    #         for j in range(Width - w + 1):
+    #             for point in range(X.shape[0]):
+    #                 crops.append([X_cropped[point,k*c0 : (k+1)*c0][p,i,j]
+    #                        for p in range(c0)])
+
+    #     X_.append(crops)
+
+    # # Create reshaped X and Y data for the new cropped images
+    # X_ = np.concatenate(X_, axis = 1)
+    # Y_ = np.tile(Y, (Height - h + 1)*(Width - w + 1))
+
+    # # Create a linear ReLU layer and reinitialise with the cropped data
+    # c0_child = nn.Linear(c0*child.in_channels, child.out_channels)
+    # c0_child.weight = nn.Parameter(child.weight.reshape(child.out_channels,
+    #                                                     c0*child.in_channels))
+    # c0_child.bias = child.bias
+    # reinitialise_relu_layer(c0_child, X_, Y_, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
+
+    # # Reshape the reinitialised weights as a convolutional weight tensor
+    # # and use as weights for the original child
+    # reshaped_weights = c0_child.weight.reshape(child.weight.shape)
+    # child.weight = nn.Parameter(reshaped_weights)
+    # child.bias = c0_child.bias
 
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
