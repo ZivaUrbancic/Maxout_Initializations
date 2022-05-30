@@ -13,7 +13,11 @@ import numpy as np
 from scipy.linalg import null_space
 from scipy.spatial.distance import cdist, euclidean
 
+import random
 
+# random.seed(234234)
+# np.random.seed(23423)
+# torch.manual_seed(4654657)
 
 # samples N points per target in the train_loader and returns
 # sampled points as a single np.array and targets as a list.
@@ -271,46 +275,103 @@ def update_regions_and_costs(R, C, functions, X, Y,
 
 def hyperplanes_through_largest_regions(X, R, C,
                                         maxout = None, w = None):
+    '''
+    Identify the regions with largest cost from the cost vector
+    and splits that region with #maxout hyperplanes.
 
+    Parameters
+    ----------
+    X : np array
+        Data matrix.
+    R : np array
+        Regions matrix.
+    C : np array
+        Costs vector.
+    maxout : int, optional
+        Maxout rank. The default is None.
+    w : np array, optional
+        Weight vector to be used, if it needs to be specified. 
+        The default is None.
+
+    Returns
+    -------
+    np array
+        Weight and biases vector, interpreted as a weight in R^{n+1}.
+
+    '''
+    
+    # Deal with the ReLU case as a maxout rank 2.
     if maxout == None:
         rank = 2
     else:
         rank = maxout
-
-    regions = regions_from_costs(C)
+        
+    # Find the indices of the existing regions from the costs vector,
+    # and collect their costs in a new vector. Sort this by size.
+    regions = regions_from_costs(C) 
     costs = C[[pair[0] for pair in regions]]
-
     sorted_region_indices = np.argsort(costs)[::-1]
-
-    #k = min(X.shape[1], len(sorted_region_indices))
-
-    #medians = []
+    
+    # Randomly initialise the weight in the (usual) case that it is
+    # not already specified.
     if w is None:
         w = np.random.normal(size = X.shape[1])
+    
+    # Compute the splitting points for the largest-cost regions, along
+    # the axis of the new weight w.
     splits = []
-
     for i in range(rank - 1):
+        
+        # Pick out the i^th largest-cost region, and find the indices
+        # of the regions matrix that correspond to that region.
         matrix_indices = regions[sorted_region_indices[i]]
+        
+        # Find the indices of the data matrix X that correspond to
+        # points in this region.
         if matrix_indices[0] == R.shape[0] - 1:
             data_indices = [R[-1, -1]]
         else:
             data_indices = R[matrix_indices[0] : matrix_indices[1], -1]
+        
+        # Slice out the data in the region, using these indices.
         data = X[data_indices]
-        #medians += [geometric_median(data)]
-        projections = calculate_projections(w, data)     # calculate proj. of pts onto weight
-        projections = np.sort(projections)
-        splits += [compute_splits(projections, 2)]       # calculate splits between batches
+        
+        # Project the data onto the axis specified by the weight
+        # vector, and compute the bias which will split it into
+        # two new regions.
+        projections = np.dot(data, w)
+        projections.sort()
+        splits += [compute_splits(projections, 2)]
 
+    # Compute factors to rescale the weight vector w for each unit,
+    # and biases for each, such that the decision boundary occurs 
+    # at the splitting points we calculated.
     factors, biases = compute_factors_and_biases(splits, maxout)
-    factors = factors.reshape(len(factors), 1)
-    w = w.reshape(1,len(w))
-    W = np.matmul(factors, w)
+    W = np.array([f*w for f in factors])
 
-    return np.concatenate((W, biases.reshape(len(biases), 1)), axis=1)
+    return np.concatenate((W, biases.reshape(-1, 1)), axis=1)
 
 
+def compute_factors_and_biases(splits, maxout = None):
+    '''
+    Compute a factor and bias for each maxout unit such that the
+    decision boundary occurs at the splitting points of splits.
 
-def compute_factors_and_biases(splits, maxout):
+    Parameters
+    ----------
+    splits : np array
+        Splitting points.
+    maxout : int, optional
+        Rank. The default is None.
+
+    Returns
+    -------
+    factors : np array
+        Factors.
+    biases : np array
+        Biases.
+
+    '''
     biases = np.zeros(len(splits)+1)
     if maxout is None:
         factors = np.array([0,1])
@@ -323,34 +384,37 @@ def compute_factors_and_biases(splits, maxout):
 
 
 
-def compute_splits(projections, maxout):
-    if maxout is None:
-        k = 2
-    else:
-        k = maxout
-    points_per_region = np.round(len(projections)/k).astype(int)
-    splits = np.zeros(k-1)
-    for i in range (k-1):
-        splits[i]=1/2*(projections[(i+1)*points_per_region - 1] + projections[(i+1)*points_per_region])
-    return splits
+def compute_splits(projections, number_of_regions = 2):
+    '''
+    Compute the midpoint of #number_of_regions equally large regions.
 
+    Parameters
+    ----------
+    projections : np array
+        1D vector of data projected onto the weight vector w.
+    number_of_regions : int, optional
+        The number of regions into which the data will be split.
+        The default is 2.
 
-def calculate_projections(w, data):
-    data_size, b = data.shape
-    c = 0
-    proj = np.zeros(data_size)
-    for x in data:
-        proj[c] = np.dot(x, w)
-        c= c+1
-    return proj
+    Returns
+    -------
+    splits : np array
+        Splitting points.
 
+    '''
+    
+    points_per_region = len(projections) // number_of_regions   
+    splits = [(projections[(i+1)*points_per_region - 1]
+                   + projections[(i+1)*points_per_region])/2
+              for i in range (number_of_regions-1)]
+    return np.array(splits)
 
-def fix_variance(X, weights, biases):
-    Xvar = np.var(X, axis=0)
-    scale_factor = np.reciprocal(np.sqrt(Xvar))
-    weights = weights * scale_factor.reshape(len(scale_factor), 1) #np.matmul(np.diag(scale_factor), weights)
-    biases = np.multiply(scale_factor, biases)
-    return weights, biases
+# def fix_variance(X, weights, biases):
+#     Xvar = np.var(X, axis=0)
+#     scale_factor = np.reciprocal(np.sqrt(Xvar))
+#     weights = weights * scale_factor.reshape(len(scale_factor), 1) #np.matmul(np.diag(scale_factor), weights)
+#     biases = np.multiply(scale_factor, biases)
+#     return weights, biases
 
 
 def fix_child_variance(child, X):
@@ -366,67 +430,65 @@ def k_th_largest_region_cost(C,k):
     # If C is empty we jump straight to stage 2, by returning 0
     if len(C) == 0:
         return 0
-    C[::-1].sort()
-    return C[k]
+    C1 = C.copy()
+    C1[::-1].sort()
+    return C1[k]
 
 
-###
-# Unused code:
-###
-def marginal_median(Y):
-    '''
-    Find the marginal median of a data set Y.
+# def marginal_median(Y):
+#     '''
+#     Find the marginal median of a data set Y.
 
-    Parameters
-    ----------
-    Y : List or Array
-        Data set in R^n.
+#     Parameters
+#     ----------
+#     Y : List or Array
+#         Data set in R^n.
 
-    Returns
-    -------
-    Array
-        Component-wise median point in R^n.
+#     Returns
+#     -------
+#     Array
+#         Component-wise median point in R^n.
 
-    '''
+#     '''
 
-    d= Y.shape[1]
-    point = []
+#     d= Y.shape[1]
+#     point = []
 
-    for n in range(d):
-        point += [np.median(Y[:,n])]
+#     for n in range(d):
+#         point += [np.median(Y[:,n])]
 
-    return np.array(point)
+#     return np.array(point)
 
 
 
-# copied from https://stackoverflow.com/questions/30299267/geometric-median-of-multidimensional-points
-def geometric_median(X, eps=1e-5):
+# # copied from https://stackoverflow.com/questions/30299267/geometric-median-of-multidimensional-points
+# def geometric_median(X, eps=1e-5):
 
-    y = np.mean(X, 0)
+#     y = np.mean(X, 0)
 
-    while True:
-        D = cdist(X, [y])
-        nonzeros = (D != 0)[:, 0]
+#     while True:
+#         D = cdist(X, [y])
+#         nonzeros = (D != 0)[:, 0]
 
-        Dinv = 1 / D[nonzeros]
-        Dinvs = np.sum(Dinv)
-        W = Dinv / Dinvs
-        T = np.sum(W * X[nonzeros], 0)
+#         Dinv = 1 / D[nonzeros]
+#         Dinvs = np.sum(Dinv)
+#         W = Dinv / Dinvs
+#         T = np.sum(W * X[nonzeros], 0)
 
-        num_zeros = len(X) - np.sum(nonzeros)
-        if num_zeros == 0:
-            y1 = T
-        elif num_zeros == len(X):
-            return y
-        else:
-            R = (T - y) * Dinvs
-            r = np.linalg.norm(R)
-            rinv = 0 if r == 0 else num_zeros/r
-            y1 = max(0, 1-rinv)*T + min(1, rinv)*y
+#         num_zeros = len(X) - np.sum(nonzeros)
+#         if num_zeros == 0:
+#             y1 = T
+#         elif num_zeros == len(X):
+#             return y
+#         else:
+#             R = (T - y) * Dinvs
+#             r = np.linalg.norm(R)
+#             rinv = 0 if r == 0 else num_zeros/r
+#             y1 = max(0, 1-rinv)*T + min(1, rinv)*y
 
-        if euclidean(y, y1) < eps:
-            return y1
-        y = y1
+#         if euclidean(y, y1) < eps:
+#             return y1
+#         y = y1
 
 def reinitialise_network(model, X, Y, adjust_regions = True, adjust_variance = True):
     N = X.shape[0] # number of data points
@@ -649,14 +711,15 @@ for d in range(20):
 Y = np.random.randint(0,5,20)
 
 def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
-                              adjust_regions = True, adjust_variance = True):
-
+                              adjust_regions = True,
+                              adjust_variance = True):
+    
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
         assert R == False and C == False
         R = initialise_region_matrix(N)
         C = initialise_costs_vector(N)
-
+    
     if adjust_regions == False and adjust_variance == False:
         return X, R, C
 
@@ -669,6 +732,9 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
                        child.groups,
                        False,
                        child.padding_mode)
+    
+    if type(X) == np.ndarray:
+        X = torch.from_numpy(X)
     
     X1 = child1(X).detach().numpy()
     X2 = X1.mean(axis = (-2,-1))
@@ -688,12 +754,14 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
         # use special reinitialisation routines until regions fall
         # below certain size
         if stage == 1:
-            print("reinitialising channel ", k)
+            print("reinitialising channel", k)
             wb = hyperplanes_through_largest_regions(X2, R, C, w = unit_vecs[k])
+
             R, C = update_regions_and_costs(R, C,
                                             [linear(wbj) for wbj in wb],
                                             X2, Y, CE_region_cost,
                                             number_of_classes)
+            
             with torch.no_grad():
                 child.bias[k] = nn.Parameter(torch.tensor(wb[1][-1]))
 
@@ -767,8 +835,112 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
     # child.weight = nn.Parameter(reshaped_weights)
     # child.bias = c0_child.bias
 
+
+
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
-        X = nn.ReLU()(child(torch.tensor(X))).numpy()
+        X = nn.ReLU()(child(X)).numpy()
 
     return X, R, C
+
+
+reinitialise_conv2d_layer(child, X, Y);
+
+
+
+def reinitialise_conv_layer(child, X, Y, R = False, C = False,
+                              adjust_regions = True,
+                              adjust_variance = True):
+    
+    if type(R) == bool or type(C) == bool:
+        N = X.shape[0] # number of data points
+        assert R == False and C == False
+        R = initialise_region_matrix(N)
+        C = initialise_costs_vector(N)
+    
+    if adjust_regions == False and adjust_variance == False:
+        return X, R, C
+    
+    if type(X) == np.ndarray:
+        X = torch.from_numpy(X.astype('float32'))
+        
+    if type(child) == torch.nn.modules.conv.Conv2d:
+        child1 = nn.Conv2d(child.in_channels,
+                       child.out_channels,
+                       child.kernel_size,
+                       child.stride,
+                       child.padding,
+                       child.dilation,
+                       child.groups,
+                       False,
+                       child.padding_mode)    
+        X1 = child1(X).detach().numpy()
+        X2 = X1.mean(axis = (-2,-1))
+        
+    elif type(child) == torch.nn.modules.conv.Conv1d:
+        child1 = nn.Conv1d(child.in_channels,
+                       child.out_channels,
+                       child.kernel_size,
+                       child.stride,
+                       child.padding,
+                       child.dilation,
+                       child.groups,
+                       False,
+                       child.padding_mode)    
+        X1 = child1(X).detach().numpy()
+        X2 = X1.mean(axis = -1)
+        
+    else:
+        raise TypeError('Child must be nn.Conv1d or nn.Conv2d')
+    
+    number_of_classes = len(set(Y))
+    # step 0: check whether maxout_rank > number of regions
+    if k_th_largest_region_cost(C, 0) == 0 or adjust_regions == False:
+        stage = 2
+    else:
+        stage = 1
+        
+    unit_vecs = np.eye(child.out_channels)
+
+    # step 1: reintialise parameters
+    for k in range(child.out_channels):
+        # stage 1:
+        # use special reinitialisation routines until regions fall
+        # below certain size
+        if stage == 1:
+            print("reinitialising channel", k)
+            wb = hyperplanes_through_largest_regions(X2, R, C, w = unit_vecs[k])
+
+            R, C = update_regions_and_costs(R, C,
+                                            [linear(wbj) for wbj in wb],
+                                            X2, Y, CE_region_cost,
+                                            number_of_classes)
+            
+            with torch.no_grad():
+                child.bias[k] = nn.Parameter(torch.tensor(wb[1][-1]))
+
+            if k_th_largest_region_cost(C, 0) == 0:
+                stage = 2
+
+        # stage 2:
+        # all regions have cost 0, keep remaining parameters
+        elif stage == 2:
+            print("keeping channel ", k, " onwards")
+            R = []
+            C = []
+            break
+
+    # compute image of the dataset under the adjusted parameters
+    with torch.no_grad():
+        X = nn.ReLU()(child(X)).numpy()
+
+    return X, R, C
+
+
+
+
+
+
+
+
+
