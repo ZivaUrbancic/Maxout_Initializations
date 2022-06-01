@@ -240,7 +240,6 @@ for run in range(num_runs):
     # print([run,c_D],file=open(str(experiment_number)+"_cost_D.log",'+a'))
     # modelD = modelD.to(device)
 
-
     ###
     # Training + Logging
     ###
