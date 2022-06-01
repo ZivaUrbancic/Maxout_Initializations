@@ -231,13 +231,13 @@ def update_regions_and_costs(R, C, functions, X, Y,
         Updated cost vector.
 
     '''
-    
-    
+
+
     # Sort X according to the order given by the indices in the reion matrix,
     # to associate each data point to its region. Compute the index of the
     # function which is maximal at x.
 
-    
+
     indices = R[:,-1]
     sorted_X = X[indices]
     regs = np.array(regions(sorted_X, functions)).reshape(-1,1)
@@ -290,7 +290,7 @@ def hyperplanes_through_largest_regions(X, R, C,
     maxout : int, optional
         Maxout rank. The default is None.
     w : np array, optional
-        Weight vector to be used, if it needs to be specified. 
+        Weight vector to be used, if it needs to be specified.
         The default is None.
 
     Returns
@@ -299,43 +299,43 @@ def hyperplanes_through_largest_regions(X, R, C,
         Weight and biases vector, interpreted as a weight in R^{n+1}.
 
     '''
-    
+
     # Deal with the ReLU case as a maxout rank 2.
     if maxout == None:
         rank = 2
     else:
         rank = maxout
-        
+
     # Find the indices of the existing regions from the costs vector,
     # and collect their costs in a new vector. Sort this by size.
-    regions = regions_from_costs(C) 
+    regions = regions_from_costs(C)
     costs = C[[pair[0] for pair in regions]]
     sorted_region_indices = np.argsort(costs)[::-1]
-    
+
     # Randomly initialise the weight in the (usual) case that it is
     # not already specified.
     if w is None:
         w = np.random.normal(size = X.shape[1])
-    
+
     # Compute the splitting points for the largest-cost regions, along
     # the axis of the new weight w.
     splits = []
     for i in range(rank - 1):
-        
+
         # Pick out the i^th largest-cost region, and find the indices
         # of the regions matrix that correspond to that region.
         matrix_indices = regions[sorted_region_indices[i]]
-        
+
         # Find the indices of the data matrix X that correspond to
         # points in this region.
         if matrix_indices[0] == R.shape[0] - 1:
             data_indices = [R[-1, -1]]
         else:
             data_indices = R[matrix_indices[0] : matrix_indices[1], -1]
-        
+
         # Slice out the data in the region, using these indices.
         data = X[data_indices]
-        
+
         # Project the data onto the axis specified by the weight
         # vector, and compute the bias which will split it into
         # two new regions.
@@ -344,7 +344,7 @@ def hyperplanes_through_largest_regions(X, R, C,
         splits += [compute_splits(projections, 2)]
 
     # Compute factors to rescale the weight vector w for each unit,
-    # and biases for each, such that the decision boundary occurs 
+    # and biases for each, such that the decision boundary occurs
     # at the splitting points we calculated.
     factors, biases = compute_factors_and_biases(splits, maxout)
     W = np.array([f*w for f in factors])
@@ -402,8 +402,8 @@ def compute_splits(projections, number_of_regions = 2):
         Splitting points.
 
     '''
-    
-    points_per_region = len(projections) // number_of_regions   
+
+    points_per_region = len(projections) // number_of_regions
     splits = [(projections[(i+1)*points_per_region - 1]
                    + projections[(i+1)*points_per_region])/2
               for i in range (number_of_regions-1)]
@@ -495,42 +495,36 @@ def reinitialise_network(model, X, Y, adjust_regions = True, adjust_variance = T
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
 
-    skip = 0
-    l = 0
-    children = [child for child in model.children()]
-    for i, child in enumerate(children):
-        if skip>0:
-            skip -= 1
+    for l, child in enumerate(model.children()):
 
-        elif type(child)==torch.nn.modules.conv.Conv1d:
-            print("Reinitialising layer ", l, " of type Conv1d")
-            l += 1
-            X, R, C = reinitialise_conv1d_layer(child, X, Y, R, C, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
+        if type(child)==torch.nn.modules.conv.Conv1d or type(child)==torch.nn.modules.conv.Conv2d:
+            print("Reinitialising layer", l,"of type Conv1d or Conv2d")
+            X, R, C = reinitialise_conv_layer(child, X, Y, R, C,
+                                              adjust_regions = adjust_regions,
+                                              adjust_variance = adjust_variance)
 
-        elif type(child)==torch.nn.modules.conv.Conv2d:
-            print("Reinitialising layer ", l, " of type Conv2d")
-            l += 1
-            X, R, C = reinitialise_conv2d_layer(child, X, Y, R, C, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
-
-        elif type(child)==torch.nn.modules.linear.Linear:
-            if len(X.shape)>2:
-                # flatten each datapoint in case input is multidimational
-                # e.g. 2D images in MNIST and CIFAR10
-                X = np.array([x.flatten() for x in X])
-            l += 1
-            if hasattr(model, 'maxout_rank'):
-                print("Reinitialising layer ", l, " of type Maxout")
-                X, R, C = reinitialise_maxout_layer(children[i:i+model.maxout_rank],
-                                                    X, Y, R, C, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
-                skip = model.maxout_rank-1
-            else:
-                print("Reinitialising layer ", l, " of type ReLU")
-                X, R, C = reinitialise_relu_layer(child, X, Y, R, C, adjust_regions = adjust_regions, adjust_variance = adjust_variance)
         else:
-            print(type(child))
-            # todo: check if layer supported, print warning if not
-            continue
+            # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
+            if len(X.shape)>2:
+                X = np.array([x.flatten() for x in X])
 
+            if type(child)==torch.nn.modules.linear.Linear:
+                print("Reinitialising layer", l,"of type ReLU")
+                X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
+                                              adjust_regions = adjust_regions,
+                                              adjust_variance = adjust_variance)
+
+            elif type(child)==torch.nn.modules.container.ModuleList:
+                print("Reinitialising layer", l,"of type Maxout")
+                X, R, C = reinitialise_maxout_layer(child, X, Y, R, C,
+                                                    adjust_regions = adjust_regions,
+                                                    adjust_variance = adjust_variance)
+
+            else:
+                print("Ignoring child of type", type(child))
+                # todo: check if layer supported, print warning if not
+
+    return C
 
 def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjust_variance = True):
     if type(R) == bool or type(C) == bool:
@@ -556,7 +550,7 @@ def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjus
         # not enough regions for running special reinitialisation routines
         # keep existing parameters until enough regions are instantiated
         if stage == 0:
-            print("keeping unit ", k)
+            print("keeping unit", k)
             w = [child.weight[k,:].detach().numpy() for child in children]
             b = [child.bias[k].detach().numpy() for child in children]
             wb = [np.concatenate((w[j], [b[j]])) for j in range(len(w))]
@@ -574,7 +568,7 @@ def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjus
         # stage 1:
         # use special reinitialisation routines until regions fall below certain size
         elif stage == 1:
-            print("reinitialising unit ", k)
+            print("reinitialising unit", k)
             wb = hyperplanes_through_largest_regions(X, R, C,
                                                      maxout = maxout_rank)
 
@@ -594,7 +588,7 @@ def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjus
         # stage 2:
         # all regions have cost 0, keep remaining parameters
         elif stage == 2:
-            print("keeping unit ", k, " onwards")
+            print("keeping unit",k,"onwards")
             R = []
             C = []
             break
@@ -642,7 +636,7 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, adjust_regions = 
         # not enough regions for running special reinitialisation routines
         # keep existing parameters until enough regions are instantiated
         if stage == 0:
-            print("keeping unit ", k)
+            print("keeping unit",k)
             w = child.weight[k,:].detach().numpy()
             b = child.bias[k].detach().numpy()
             wb = np.concatenate((w[j], [b[j]]))
@@ -660,7 +654,7 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, adjust_regions = 
         # stage 1:
         # use special reinitialisation routines until regions fall below certain size
         elif stage == 1:
-            print("reinitialising unit ", k)
+            print("reinitialising unit",k)
             wb = hyperplanes_through_largest_regions(X, R, C)
             R, C = update_regions_and_costs(R, C,
                                             [linear(wbj) for wbj in wb],
@@ -676,7 +670,7 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, adjust_regions = 
         # stage 2:
         # all regions have cost 0, keep remaining parameters
         elif stage == 2:
-            print("keeping unit ", k, " onwards")
+            print("keeping unit",k,"onwards")
             R = []
             C = []
             break
@@ -713,13 +707,13 @@ Y = np.random.randint(0,5,20)
 def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
                               adjust_regions = True,
                               adjust_variance = True):
-    
+
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
         assert R == False and C == False
         R = initialise_region_matrix(N)
         C = initialise_costs_vector(N)
-    
+
     if adjust_regions == False and adjust_variance == False:
         return X, R, C
 
@@ -732,20 +726,19 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
                        child.groups,
                        False,
                        child.padding_mode)
-    
     if type(X) == np.ndarray:
         X = torch.from_numpy(X)
-    
+
     X1 = child1(X).detach().numpy()
     X2 = X1.mean(axis = (-2,-1))
-    
+
     number_of_classes = len(set(Y))
     # step 0: check whether maxout_rank > number of regions
     if k_th_largest_region_cost(C, 0) == 0 or adjust_regions == False:
         stage = 2
     else:
         stage = 1
-        
+
     unit_vecs = np.eye(child.out_channels)
 
     # step 1: reintialise parameters
@@ -754,14 +747,14 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
         # use special reinitialisation routines until regions fall
         # below certain size
         if stage == 1:
-            print("reinitialising channel", k)
+            print("reinitialising channel",k)
             wb = hyperplanes_through_largest_regions(X2, R, C, w = unit_vecs[k])
 
             R, C = update_regions_and_costs(R, C,
                                             [linear(wbj) for wbj in wb],
                                             X2, Y, CE_region_cost,
                                             number_of_classes)
-            
+
             with torch.no_grad():
                 child.bias[k] = nn.Parameter(torch.tensor(wb[1][-1]))
 
@@ -771,7 +764,7 @@ def reinitialise_conv2d_layer(child, X, Y, R = False, C = False,
         # stage 2:
         # all regions have cost 0, keep remaining parameters
         elif stage == 2:
-            print("keeping channel ", k, " onwards")
+            print("keeping channel",k,"onwards")
             R = []
             C = []
             break
@@ -851,19 +844,19 @@ reinitialise_conv2d_layer(child, X, Y);
 def reinitialise_conv_layer(child, X, Y, R = False, C = False,
                               adjust_regions = True,
                               adjust_variance = True):
-    
+
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
         assert R == False and C == False
         R = initialise_region_matrix(N)
         C = initialise_costs_vector(N)
-    
+
     if adjust_regions == False and adjust_variance == False:
         return X, R, C
-    
+
     if type(X) == np.ndarray:
         X = torch.from_numpy(X.astype('float32'))
-        
+
     if type(child) == torch.nn.modules.conv.Conv2d:
         child1 = nn.Conv2d(child.in_channels,
                        child.out_channels,
@@ -873,10 +866,10 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
                        child.dilation,
                        child.groups,
                        False,
-                       child.padding_mode)    
+                       child.padding_mode)
         X1 = child1(X).detach().numpy()
         X2 = X1.mean(axis = (-2,-1))
-        
+
     elif type(child) == torch.nn.modules.conv.Conv1d:
         child1 = nn.Conv1d(child.in_channels,
                        child.out_channels,
@@ -886,20 +879,20 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
                        child.dilation,
                        child.groups,
                        False,
-                       child.padding_mode)    
+                       child.padding_mode)
         X1 = child1(X).detach().numpy()
         X2 = X1.mean(axis = -1)
-        
+
     else:
         raise TypeError('Child must be nn.Conv1d or nn.Conv2d')
-    
+
     number_of_classes = len(set(Y))
     # step 0: check whether maxout_rank > number of regions
     if k_th_largest_region_cost(C, 0) == 0 or adjust_regions == False:
         stage = 2
     else:
         stage = 1
-        
+
     unit_vecs = np.eye(child.out_channels)
 
     # step 1: reintialise parameters
@@ -915,7 +908,7 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
                                             [linear(wbj) for wbj in wb],
                                             X2, Y, CE_region_cost,
                                             number_of_classes)
-            
+
             with torch.no_grad():
                 child.bias[k] = nn.Parameter(torch.tensor(wb[1][-1]))
 
@@ -935,12 +928,3 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
         X = nn.ReLU()(child(X)).numpy()
 
     return X, R, C
-
-
-
-
-
-
-
-
-

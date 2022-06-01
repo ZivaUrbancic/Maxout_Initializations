@@ -24,22 +24,27 @@ def read_data_from_exp(file, num_runs, num_epochs):
     return X
 
 def compute_Y1_Y2(experiment_number, acc_or_loss, num_runs, num_epochs):
-    f1 = experiment_number+"_"+acc_or_loss+"_default.log"
-    f2 = experiment_number+"_"+acc_or_loss+"_reinit.log"
+    f1 = experiment_number+"_"+acc_or_loss+"_A.log"
+    f2 = experiment_number+"_"+acc_or_loss+"_B.log"
     D = read_data_from_exp(f1, num_runs, num_epochs)
     R = read_data_from_exp(f2, num_runs, num_epochs)
     return D, R
 
 def compute_Y1_Y2_Y3(experiment_number, acc_or_loss, num_runs, num_epochs):
-    f1 = experiment_number+"_"+acc_or_loss+"_default.log"
-    f2 = experiment_number+"_"+acc_or_loss+"_rescale.log"
-    f3 = experiment_number+"_"+acc_or_loss+"_reinit.log"
+    f1 = experiment_number+"_"+acc_or_loss+"_A.log"
+    f2 = experiment_number+"_"+acc_or_loss+"_B.log"
+    f3 = experiment_number+"_"+acc_or_loss+"_C.log"
     Y1 = read_data_from_exp(f1, num_runs, num_epochs)
     Y2 = read_data_from_exp(f2, num_runs, num_epochs)
     Y3 = read_data_from_exp(f3, num_runs, num_epochs)
     return Y1, Y2, Y3
 
-def visualiseOld(Y1, Y2, Y1_std=None, Y2_std=None):
+def compute_Ys(experiment_number, models, acc_or_loss, num_runs, num_epochs):
+    fs = [experiment_number+"_"+acc_or_loss+"_"+model+".log" for model in models]
+    Ys = [read_data_from_exp(fi, num_runs, num_epochs) for fi in fs]
+    return Ys
+
+def visualiseOld2(Y1, Y2, Y1_std=None, Y2_std=None):
     X = np.linspace(0, num_epochs, num=len(Y1))
     plt.plot(X, Y1, "royalblue")
     plt.plot(X, Y2, "orange")
@@ -47,7 +52,7 @@ def visualiseOld(Y1, Y2, Y1_std=None, Y2_std=None):
         plt.fill_between(X, Y1-Y1_std, Y1+Y1_std, color="skyblue")
         plt.fill_between(X, Y2-Y2_std, Y2+Y2_std, color="navajowhite")
 
-def visualise(Y1, Y2, Y3, Y1_std=None, Y2_std=None, Y3_std=None):
+def visualiseOld3(Y1, Y2, Y3, Y1_std=None, Y2_std=None, Y3_std=None):
     X = np.linspace(0, num_epochs, num=len(Y1))
     plt.plot(X, Y1, "r")
     plt.plot(X, Y2, "b")
@@ -57,15 +62,23 @@ def visualise(Y1, Y2, Y3, Y1_std=None, Y2_std=None, Y3_std=None):
         plt.fill_between(X, Y2-Y2_std, Y2+Y2_std, color="navajowhite")
         plt.fill_between(X, Y3-Y3_std, Y3+Y3_std, color="navajowhite")
 
-#experiment_number = "491331889", "248360644"
-e = ["143667097"]
-Y1 = []
-Y2 = []
-Y3 = []
-Z1 = []
-Z2 = []
-Z3 = []
-for experiment_number in e:
+def visualise(Ys, Ys_std=None):
+    X = np.linspace(0, num_epochs, num=len(Ys[1]))
+    colours = ["red","blue","green","darkorange"]
+    colours_std = ["mistyrose","lightskyblue","palegreen","bisque"]
+
+    for Yi,colour in zip(Ys,colours):
+        plt.plot(X, Yi, colour)
+
+    if Ys_std != None:
+        for Yi,Yi_std,colour_std in zip(Ys,Ys_std,colours_std):
+            plt.fill_between(X, Yi+Yi_std, Yi-Yi_std, color=colour_std)
+
+experiment_numbers = ["533125786"]
+experiment_models = ["A", "B", "C", "D"]
+Ys = [[] for model in experiment_models] # accuracies
+Zs = [[] for model in experiment_models] # losses
+for experiment_number in experiment_numbers:
 
     f = open(experiment_number+".log", "r")
     for i, l in enumerate(f):
@@ -76,41 +89,23 @@ for experiment_number in e:
             s = l.split(" ")
             num_epochs = int(s[2])
 
-    y1, y2, y3 = compute_Y1_Y2_Y3(experiment_number, "acc", num_runs, num_epochs)
-    z1, z2, z3 =  compute_Y1_Y2_Y3(experiment_number, "loss", num_runs, num_epochs)
-    if len(Y1)==0:
-        Y1 = np.array(y1)
-        Y2 = np.array(y2)
-        Y3 = np.array(y3)
-        Z1 = np.array(z1)
-        Z2 = np.array(z2)
-        Z3 = np.array(z3)
+    ys = compute_Ys(experiment_number, experiment_models, "acc", num_runs, num_epochs)
+    zs = compute_Ys(experiment_number, experiment_models, "loss", num_runs, num_epochs)
+    if len(Ys[0])==0:
+        Ys = [np.array(yi) for yi in ys]
+        Zs = [np.array(zi) for zi in zs]
     else:
-        Y1 = np.concatenate((Y1, np.array(y1)), axis = 0)
-        Y2 = np.concatenate((Y2, np.array(y2)), axis = 0)
-        Y3 = np.concatenate((Y3, np.array(y3)), axis = 0)
-        Z1 = np.concatenate((Z1, np.array(z1)), axis = 0)
-        Z2 = np.concatenate((Z2, np.array(z2)), axis = 0)
-        Z3 = np.concatenate((Z3, np.array(z3)), axis = 0)
+        for i in range(len(Ys)):
+            Ys[i] = np.concatenate((Ys[i], np.array(ys[i])), axis = 0)
+            Zs[i] = np.concatenate((Zs[i], np.array(zs[i])), axis = 0)
 
-Y1_std = Y1.std(axis=0)
-Y2_std = Y2.std(axis=0)
-Y3_std = Y3.std(axis=0)
-Z1_std = Z1.std(axis=0)
-Z2_std = Z2.std(axis=0)
-Z3_std = Z3.std(axis=0)
-Y1 = Y1.mean(axis=0)
-Y2 = Y2.mean(axis=0)
-Y3 = Y3.mean(axis=0)
-Z1 = Z1.mean(axis=0)
-Z2 = Z2.mean(axis=0)
-Z3 = Z3.mean(axis=0)
+Ys_std = [np.array(Yi).std(axis=0) for Yi in Ys]
+Zs_std = [np.array(Zi).std(axis=0) for Zi in Zs]
+Ys = [Yi.mean(axis=0) for Yi in Ys]
+Zs = [Zi.mean(axis=0) for Zi in Zs]
 
 plt.figure(0)
-visualise(Y1, Y2, Y3)#, Y1_std, Y2_std, Y3_std)
+visualise(Ys)#, Ys_std)
 plt.figure(1)
-visualise(Z1, Z2, Z3)#, Z1_std, Z2_std, Z3_std)
+visualise(Zs)#, Zs_std)
 plt.show()
-
-print(Y1[-1], Y2[-1], Y3[-1])
-print(Z1[-1], Z2[-1], Z3[-1])

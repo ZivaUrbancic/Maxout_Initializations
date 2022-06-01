@@ -18,12 +18,13 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 12
-num_epochs = 12
+experiment_info = "modelA = nothing; modelB = rescaling; modelC = redistricting + rescaling; modelD = None; checking the effects of region adustment."
+num_runs = 128
+num_epochs = 24
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
-network_size = "large" # "small" or "large"
+network_size = "small" # "small" or "large"
 network_rank = 7 # WARNING: does not change network below, adjust by hand
 
 
@@ -111,151 +112,78 @@ if dataset == "CIFAR10": # todo
 ###
 # Defining Network
 ###
-mySoftmax = torch.nn.Softmax(dim=0)
 class MaxoutNet(nn.Module):
     def __init__(self):
         super(MaxoutNet, self).__init__()
-        self.lay1lin1 = nn.Linear(n0, n1)
-        self.lay1lin2 = nn.Linear(n0, n1)
-        self.lay1lin3 = nn.Linear(n0, n1)
-        self.lay1lin4 = nn.Linear(n0, n1)
-        self.lay1lin5 = nn.Linear(n0, n1)
-        self.lay1lin6 = nn.Linear(n0, n1)
-        self.lay1lin7 = nn.Linear(n0, n1)
-        self.lay2lin1 = nn.Linear(n1, n2)
-        self.lay2lin2 = nn.Linear(n1, n2)
-        self.lay2lin3 = nn.Linear(n1, n2)
-        self.lay2lin4 = nn.Linear(n1, n2)
-        self.lay2lin5 = nn.Linear(n1, n2)
-        self.lay2lin6 = nn.Linear(n1, n2)
-        self.lay2lin7 = nn.Linear(n1, n2)
-        self.lay3lin1 = nn.Linear(n2, n3)
-        self.lay3lin2 = nn.Linear(n2, n3)
-        self.lay3lin3 = nn.Linear(n2, n3)
-        self.lay3lin4 = nn.Linear(n2, n3)
-        self.lay3lin5 = nn.Linear(n2, n3)
-        self.lay3lin6 = nn.Linear(n2, n3)
-        self.lay3lin7 = nn.Linear(n2, n3)
-        self.maxout_rank = 7
+        self.lay1 = nn.ModuleList([nn.Linear(n0, n1) for i in range(network_rank)])
+        self.lay2 = nn.ModuleList([nn.Linear(n1, n2) for i in range(network_rank)])
+        self.lay3 = nn.ModuleList([nn.Linear(n2, n3) for i in range(network_rank)])
+        self.maxout_rank = network_rank
 
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)
-        x = x.unsqueeze(0) # make vector of length n0 into 1*n0 matrix
-        X = torch.cat( (self.lay1lin1(x),
-                        self.lay1lin2(x),
-                        self.lay1lin3(x),
-                        self.lay1lin4(x),
-                        self.lay1lin5(x),
-                        self.lay1lin6(x),
-                        self.lay1lin7(x)), 0)
-              # concatenate output vectors into matrix (row-wise by default)
-              # size: rank * width layer 1
-        x,dummy = torch.max(X,0)
-              # go through each column and compute max
-              # size: 1 * width layer 1
-        x = x.unsqueeze(0)
-        X = torch.cat( (self.lay2lin1(x),
-                        self.lay2lin2(x),
-                        self.lay2lin3(x),
-                        self.lay2lin4(x),
-                        self.lay2lin5(x),
-                        self.lay2lin6(x),
-                        self.lay2lin7(x)), 0)
-              # concatenate output vectors into matrix (row-wise by default)
-              # size: rank * width layer 2
-        x,dummy = torch.max(X,0)
-              # go through each column and compute max
-              # size: 1 * width layer 2
-        x = x.unsqueeze(0)
-        X = torch.cat( (self.lay3lin1(x),
-                        self.lay3lin2(x),
-                        self.lay3lin3(x),
-                        self.lay3lin4(x),
-                        self.lay3lin5(x),
-                        self.lay3lin6(x),
-                        self.lay3lin7(x)), 0)
-              # concatenate output vectors into matrix (row-wise by default)
-              # size: rank * width layer 2
-        x,dummy = torch.max(X,0)
-              # go through each column and compute max
-              # size: 1 * width layer 2
-        # x = mySoftmax(x) # wth does this make loss worse?
+        x = x.view(x.size(0), -1) # size: batch_size * n0
+        X = torch.stack( [lin(x) for lin in self.lay1] )
+                                  # size: network_rank * batch_size * n1
+        x,_ = torch.max(X,0)      # size: batch_size * n1
+        X = torch.stack( [lin(x) for lin in self.lay2] )
+                                  # size: network_rank * batch_size * n2
+        x,_ = torch.max(X,0)      # size: batch_size * n2
+        X = torch.stack( [lin(x) for lin in self.lay3] )
+                                  # size: network_rank * batch_size * n3
+        x,_ = torch.max(X,0)      # size: batch_size * n3
         return x
 
 class MaxoutBatchnormNet(nn.Module):
     def __init__(self):
         super(MaxoutBatchnormNet, self).__init__()
-        self.lay1lin1 = nn.Linear(n0, n1)
-        self.lay1lin2 = nn.Linear(n0, n1)
-        self.lay1lin3 = nn.Linear(n0, n1)
-        self.lay1lin4 = nn.Linear(n0, n1)
-        self.lay1lin5 = nn.Linear(n0, n1)
-        self.lay1lin6 = nn.Linear(n0, n1)
-        self.lay1lin7 = nn.Linear(n0, n1)
-        self.lay2lin1 = nn.Linear(n1, n2)
-        self.lay2lin2 = nn.Linear(n1, n2)
-        self.lay2lin3 = nn.Linear(n1, n2)
-        self.lay2lin4 = nn.Linear(n1, n2)
-        self.lay2lin5 = nn.Linear(n1, n2)
-        self.lay2lin6 = nn.Linear(n1, n2)
-        self.lay2lin7 = nn.Linear(n1, n2)
-        self.lay3lin1 = nn.Linear(n2, n3)
-        self.lay3lin2 = nn.Linear(n2, n3)
-        self.lay3lin3 = nn.Linear(n2, n3)
-        self.lay3lin4 = nn.Linear(n2, n3)
-        self.lay3lin5 = nn.Linear(n2, n3)
-        self.lay3lin6 = nn.Linear(n2, n3)
-        self.lay3lin7 = nn.Linear(n2, n3)
+        self.lay1 = nn.ModuleList([nn.Linear(n0, n1) for i in range(network_rank)])
+        self.lay2 = nn.ModuleList([nn.Linear(n1, n2) for i in range(network_rank)])
+        self.lay3 = nn.ModuleList([nn.Linear(n2, n3) for i in range(network_rank)])
         self.bn1 = nn.BatchNorm1d(n1)
         self.bn2 = nn.BatchNorm1d(n2)
         self.bn3 = nn.BatchNorm1d(n3)
-        self.maxout_rank = 7
+        self.maxout_rank = network_rank
 
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)
-        x = x.unsqueeze(0) # make vector of length n0 into 1*n0 matrix
-        X = torch.cat( (self.bn1(self.lay1lin1(x)),
-                        self.bn1(self.lay1lin2(x)),
-                        self.bn1(self.lay1lin3(x)),
-                        self.bn1(self.lay1lin4(x)),
-                        self.bn1(self.lay1lin5(x)),
-                        self.bn1(self.lay1lin6(x)),
-                        self.bn1(self.lay1lin7(x))), 0)
-              # concatenate output vectors into matrix (row-wise by default)
-              # size: rank * width layer 1
-        x,dummy = torch.max(X,0)
-              # go through each column and compute max
-              # size: 1 * width layer 1
-        x = x.unsqueeze(0)
-        X = torch.cat( (self.bn2(self.lay2lin1(x)),
-                        self.bn2(self.lay2lin2(x)),
-                        self.bn2(self.lay2lin3(x)),
-                        self.bn2(self.lay2lin4(x)),
-                        self.bn2(self.lay2lin5(x)),
-                        self.bn2(self.lay2lin6(x)),
-                        self.bn2(self.lay2lin7(x))), 0)
-              # concatenate output vectors into matrix (row-wise by default)
-              # size: rank * width layer 2
-        x,dummy = torch.max(X,0)
-              # go through each column and compute max
-              # size: 1 * width layer 2
-        x = x.unsqueeze(0)
-        X = torch.cat( (self.bn3(self.lay3lin1(x)),
-                        self.bn3(self.lay3lin2(x)),
-                        self.bn3(self.lay3lin3(x)),
-                        self.bn3(self.lay3lin4(x)),
-                        self.bn3(self.lay3lin5(x)),
-                        self.bn3(self.lay3lin6(x)),
-                        self.bn3(self.lay3lin7(x))), 0)
-              # concatenate output vectors into matrix (row-wise by default)
-              # size: rank * width layer 2
-        x,dummy = torch.max(X,0)
-              # go through each column and compute max
-              # size: 1 * width layer 2
-        # x = mySoftmax(x) # wth does this make loss worse?
+        x = x.view(x.size(0), -1) # size: batch_size * n0
+        X = torch.stack( [self.bn1(lin(x)) for lin in self.lay1] )
+                                  # size: network_rank * batch_size * n1
+        x,_ = torch.max(X,0)      # size: batch_size * n1
+        X = torch.stack( [self.bn2(lin(x)) for lin in self.lay2] )
+                                  # size: network_rank * batch_size * n2
+        x,_ = torch.max(X,0)      # size: batch_size * n2
+        X = torch.stack( [self.bn3(lin(x)) for lin in self.lay3] )
+                                  # size: network_rank * batch_size * n3
+        x,_ = torch.max(X,0)      # size: batch_size * n3
         return x
+
+class MaxoutSoftmaxNet(nn.Module):
+    def __init__(self):
+        super(MaxoutSoftmaxNet, self).__init__()
+        self.lay1 = nn.ModuleList([nn.Linear(n0, n1) for i in range(network_rank)])
+        self.lay2 = nn.ModuleList([nn.Linear(n1, n2) for i in range(network_rank)])
+        self.lay3 = nn.ModuleList([nn.Linear(n2, n3) for i in range(network_rank)])
+        self.softmax = nn.Softmax(dim=1)
+        self.maxout_rank = network_rank
+
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1) # size: batch_size * n0
+        X = torch.stack( [lin(x) for lin in self.lay1] )
+                                  # size: network_rank * batch_size * n1
+        x,_ = torch.max(X,0)      # size: batch_size * n1
+        X = torch.stack( [lin(x) for lin in self.lay2] )
+                                  # size: network_rank * batch_size * n2
+        x,_ = torch.max(X,0)      # size: batch_size * n2
+        X = torch.stack( [lin(x) for lin in self.lay3] )
+                                  # size: network_rank * batch_size * n3
+        x,_ = torch.max(X,0)      # size: batch_size * n3
+        x = self.softmax(x) # Why does this make loss worse?
+        # Answer: beccause nn.CrossEntropyloss already incorporates softmax, so using softmax here is generally not recommended
+        return x
+
 
 ###
 # Running experiments
@@ -269,6 +197,7 @@ print("activation: maxout\n",
       "data_sample_size:",data_sample_size,"\n",
       "num_runs:",num_runs,"\n",
       "num_epochs",num_epochs,"\n",
+      "info:\n",experiment_info,"\n",
       file=open(str(experiment_number)+".log",'+a'))
 
 for run in range(num_runs):
@@ -277,29 +206,54 @@ for run in range(num_runs):
                                                shuffle=True)
     X, Y = sample_dataset(train_dataset, train_loader, data_sample_size)
 
-    modelDefault = MaxoutBatchnormNet().to(device) # batchnorm only
-    modelRescale = MaxoutNet().to(device)          # rescale only
-    modelReinit = MaxoutBatchnormNet().to(device)  # rescale + batchnorm
-
-    reinitialise_network(modelDefault, X, Y, adjust_regions = True, adjust_variance = False)
-    modelDefault = modelDefault.to(device)
-
-    reinitialise_network(modelRescale, X, Y, adjust_regions = True, adjust_variance = True)
-    modelRescale = modelRescale.to(device)
-
+    ###
+    # Definition + Reinitialisation
+    # (set models to None if not needed, e.g. 'modelC = None'
+    ###
     print("run ",run+1," of ",num_runs,": reinitialising")
-    c_reinit = reinitialise_network(modelReinit, X, Y, adjust_regions = True, adjust_variance = True)
-    modelReinit = modelReinit.to(device)
-    print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
+    modelA = MaxoutNet().to(device) # nothing
+    c_A = reinitialise_network(modelA, X, Y, adjust_regions = False, adjust_variance = False)
+    print([run,c_A],file=open(str(experiment_number)+"_cost_A.log",'+a'))
+    modelA = modelA.to(device)
+    print("====================",c_A,"====================")
 
+    modelB = MaxoutNet().to(device) # rescaling only
+    c_B = reinitialise_network(modelB, X, Y, adjust_regions = False, adjust_variance = True)
+    print([run,c_B],file=open(str(experiment_number)+"_cost_B.log",'+a'))
+    modelB = modelB.to(device)
+    print("====================",c_B,"====================")
+
+    modelC = MaxoutNet().to(device)  # redistricting + rescaling
+    c_C = reinitialise_network(modelC, X, Y, adjust_regions = True, adjust_variance = True)
+    print([run,c_C],file=open(str(experiment_number)+"_cost_C.log",'+a'))
+    modelC = modelC.to(device)
+    print("====================",c_C,"====================")
+
+    assert False
+
+    modelD = None
+    # c_D = reinitialise_network(modelC, X, Y, adjust_regions = False, adjust_variance = True)
+    # print([run,c_D],file=open(str(experiment_number)+"_cost_D.log",'+a'))
+    # modelD = modelD.to(device)
+
+
+    ###
+    # Training + Logging
+    ###
     criterion = nn.CrossEntropyLoss()
-    optimizerDefault = torch.optim.SGD(modelDefault.parameters(), lr=learning_rate)
-    optimizerRescale = torch.optim.SGD(modelRescale.parameters(), lr=learning_rate)
-    optimizerReinit = torch.optim.SGD(modelReinit.parameters(), lr=learning_rate)
+    if modelA != None:
+        optimizerA = torch.optim.SGD(modelA.parameters(), lr=learning_rate)
+    if modelB != None:
+        optimizerB = torch.optim.SGD(modelB.parameters(), lr=learning_rate)
+    if modelC != None:
+        optimizerC = torch.optim.SGD(modelC.parameters(), lr=learning_rate)
+    if modelD != None:
+        optimizerD = torch.optim.SGD(modelD.parameters(), lr=learning_rate)
 
-    log_loss_default = []
-    log_loss_rescale = []
-    log_loss_reinit = []
+    log_loss_A = [] # for logging purposes
+    log_loss_B = []
+    log_loss_C = []
+    log_loss_D = []
 
     print("run ",run+1," of ",num_runs,": training")
     n_total_steps = len(train_loader)
@@ -308,73 +262,108 @@ for run in range(num_runs):
         for i, (images, labels) in enumerate(train_loader):
             images, labels = images.to(device), labels.to(device)
 
-            # Forward pass
-            outputsDefault = modelDefault(images)
-            lossDefault = criterion(outputsDefault, labels)
-            outputsRescale = modelRescale(images)
-            lossRescale = criterion(outputsRescale, labels)
-            outputsReinit = modelReinit(images)
-            lossReinit = criterion(outputsReinit, labels)
+            if modelA != None:
+                # Forward pass
+                outputsA = modelA(images)
+                lossA = criterion(outputsA, labels)
+                # Backward and optimize
+                optimizerA.zero_grad()
+                lossA.backward()
+                optimizerA.step()
+            if modelB != None:
+                # Forward pass
+                outputsB = modelB(images)
+                lossB = criterion(outputsB, labels)
+                # Backward and optimize
+                optimizerB.zero_grad()
+                lossB.backward()
+                optimizerB.step()
+            if modelC != None:
+                # Forward pass
+                outputsC = modelC(images)
+                lossC = criterion(outputsC, labels)
+                # Backward and optimize
+                optimizerC.zero_grad()
+                lossC.backward()
+                optimizerC.step()
+            if modelD != None:
+                # Forward pass
+                outputsD = modelD(images)
+                lossD = criterion(outputsD, labels)
+                # Backward and optimize
+                optimizerD.zero_grad()
+                lossD.backward()
+                optimizerD.step()
 
-            # Backward and optimize
-            optimizerDefault.zero_grad()
-            lossDefault.backward()
-            optimizerDefault.step()
-            optimizerRescale.zero_grad()
-            lossRescale.backward()
-            optimizerRescale.step()
-            optimizerReinit.zero_grad()
-            lossReinit.backward()
-            optimizerReinit.step()
+            ###
+            # Bookkeeping (only every 10 steps)
+            ###
+            if (i+1) % 10 > 0:
+                continue
 
-            if (i+1) % 10 == 0:
+            with torch.no_grad():
+                n_samples = 0
+                n_class_samples = [0 for i in range(10)]
+                n_correct_A = 0
+                n_class_correct_A = [0 for i in range(10)]
+                n_correct_B = 0
+                n_class_correct_B = [0 for i in range(10)]
+                n_correct_C = 0
+                n_class_correct_C = [0 for i in range(10)]
+                n_correct_D = 0
+                n_class_correct_D = [0 for i in range(10)]
+                for images, labels in test_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
+                    if modelA != None:
+                        outputsA = modelA(images)
+                        _, predictedA = torch.max(outputsA, 1)
+                        n_correct_A += (predictedA == labels).sum().item()
+                    if modelB != None:
+                        outputsB = modelB(images)
+                        _, predictedB = torch.max(outputsB, 1)
+                        n_correct_B += (predictedB == labels).sum().item()
+                    if modelC != None:
+                        outputsC = modelC(images)
+                        _, predictedC = torch.max(outputsC, 1)
+                        n_correct_C += (predictedC == labels).sum().item()
+                    if modelD != None:
+                        outputsD = modelD(images)
+                        _, predictedD = torch.max(outputsD, 1)
+                        n_correct_D += (predictedD == labels).sum().item()
 
-                with torch.no_grad():
-                    n_correct_default = 0
-                    n_correct_rescale = 0
-                    n_correct_reinit = 0
-                    n_samples = 0
-                    n_class_correct_default = [0 for i in range(10)]
-                    n_class_correct_rescale = [0 for i in range(10)]
-                    n_class_correct_reinit = [0 for i in range(10)]
-                    n_class_samples = [0 for i in range(10)]
-                    for images, labels in test_loader:
-                        images = images.to(device)
-                        labels = labels.to(device)
-                        outputsDefault = modelDefault(images)
-                        outputsRescale = modelRescale(images)
-                        outputsReinit = modelReinit(images)
-                        _, predictedDefault = torch.max(outputsDefault, 1)
-                        _, predictedRescale = torch.max(outputsRescale, 1)
-                        _, predictedReinit = torch.max(outputsReinit, 1)
-                        n_samples += labels.size(0)
-                        n_correct_default += (predictedDefault == labels).sum().item()
-                        n_correct_rescale += (predictedRescale == labels).sum().item()
-                        n_correct_reinit += (predictedReinit == labels).sum().item()
+                    n_samples += labels.size(0)
+                    for j,label in enumerate(labels):
+                        if modelA != None and label == predictedA[j]:
+                            n_class_correct_A[label] += 1
+                        if modelB != None and label == predictedB[j]:
+                            n_class_correct_B[label] += 1
+                        if modelC != None and label == predictedC[j]:
+                            n_class_correct_C[label] += 1
+                        if modelD != None and label == predictedD[j]:
+                            n_class_correct_D[label] += 1
+                        n_class_samples[label] += 1
 
-                        for j in range(labels.size(0)):
-                            label = labels[j]
-                            pred_default = predictedDefault[j]
-                            if (label == pred_default):
-                                n_class_correct_default[label] += 1
-                            pred_rescale = predictedRescale[j]
-                            if (label == pred_rescale):
-                                n_class_correct_rescale[label] += 1
-                            pred_reinit = predictedReinit[j]
-                            if (label == pred_reinit):
-                                n_class_correct_reinit[label] += 1
-                            n_class_samples[label] += 1
+                if modelA != None:
+                    acc_A = [100 * n_correct_A / n_samples]
+                    acc_A += [n_class_correct_A[j] / n_class_samples[j] for j in range(10)]
+                    print([[run,epoch,i],[lossA.item()]],file=open(str(experiment_number)+"_loss_A.log",'+a'))
+                    print([[run,epoch,i],acc_A],file=open(str(experiment_number)+"_acc_A.log",'+a'))
 
-                    acc_default = [100 * n_correct_default / n_samples]
-                    acc_rescale = [100 * n_correct_rescale / n_samples]
-                    acc_reinit = [100 * n_correct_reinit / n_samples]
-                    acc_default += [n_class_correct_default[j] / n_class_samples[j] for j in range(10)]
-                    acc_rescale += [n_class_correct_rescale[j] / n_class_samples[j] for j in range(10)]
-                    acc_reinit += [n_class_correct_reinit[j] / n_class_samples[j] for j in range(10)]
+                if modelB != None:
+                    acc_B = [100 * n_correct_B / n_samples]
+                    acc_B += [n_class_correct_B[j] / n_class_samples[j] for j in range(10)]
+                    print([[run,epoch,i],[lossB.item()]],file=open(str(experiment_number)+"_loss_B.log",'+a'))
+                    print([[run,epoch,i],acc_B],file=open(str(experiment_number)+"_acc_B.log",'+a'))
 
-                    print([[run,epoch,i],[lossDefault.item()]],file=open(str(experiment_number)+"_loss_default.log",'+a'))
-                    print([[run,epoch,i],[lossRescale.item()]],file=open(str(experiment_number)+"_loss_rescale.log",'+a'))
-                    print([[run,epoch,i],[lossReinit.item()]],file=open(str(experiment_number)+"_loss_reinit.log",'+a'))
-                    print([[run,epoch,i],acc_default],file=open(str(experiment_number)+"_acc_default.log",'+a'))
-                    print([[run,epoch,i],acc_rescale],file=open(str(experiment_number)+"_acc_rescale.log",'+a'))
-                    print([[run,epoch,i],acc_reinit],file=open(str(experiment_number)+"_acc_reinit.log",'+a'))
+                if modelC != None:
+                    acc_C = [100 * n_correct_C / n_samples]
+                    acc_C += [n_class_correct_C[j] / n_class_samples[j] for j in range(10)]
+                    print([[run,epoch,i],[lossC.item()]],file=open(str(experiment_number)+"_loss_C.log",'+a'))
+                    print([[run,epoch,i],acc_C],file=open(str(experiment_number)+"_acc_C.log",'+a'))
+
+                if modelD != None:
+                    acc_D = [100 * n_correct_D / n_samples]
+                    acc_D += [n_class_correct_D[j] / n_class_samples[j] for j in range(10)]
+                    print([[run,epoch,i],[lossD.item()]],file=open(str(experiment_number)+"_loss_D.log",'+a'))
+                    print([[run,epoch,i],acc_D],file=open(str(experiment_number)+"_acc_D.log",'+a'))
