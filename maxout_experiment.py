@@ -25,7 +25,7 @@ batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
 network_size = "small" # "small" or "large"
-network_rank = 7 # WARNING: does not change network below, adjust by hand
+network_rank = 3
 
 
 
@@ -120,7 +120,6 @@ class MaxoutNet(nn.Module):
         self.lay3 = nn.ModuleList([nn.Linear(n2, n3) for i in range(network_rank)])
         self.maxout_rank = network_rank
 
-
     def forward(self, x):
         x = x.view(x.size(0), -1) # size: batch_size * n0
         X = torch.stack( [lin(x) for lin in self.lay1] )
@@ -145,7 +144,6 @@ class MaxoutBatchnormNet(nn.Module):
         self.bn3 = nn.BatchNorm1d(n3)
         self.maxout_rank = network_rank
 
-
     def forward(self, x):
         x = x.view(x.size(0), -1) # size: batch_size * n0
         X = torch.stack( [self.bn1(lin(x)) for lin in self.lay1] )
@@ -167,7 +165,6 @@ class MaxoutSoftmaxNet(nn.Module):
         self.lay3 = nn.ModuleList([nn.Linear(n2, n3) for i in range(network_rank)])
         self.softmax = nn.Softmax(dim=1)
         self.maxout_rank = network_rank
-
 
     def forward(self, x):
         x = x.view(x.size(0), -1) # size: batch_size * n0
@@ -210,28 +207,35 @@ for run in range(num_runs):
     # Definition + Reinitialisation
     # (set models to None if not needed, e.g. 'modelC = None'
     ###
-    print("run ",run+1," of ",num_runs,": reinitialising")
     modelA = MaxoutNet().to(device) # nothing
-    c_A = reinitialise_network(modelA, X, Y, adjust_regions = False, adjust_variance = False)
+    print("run ",run+1," of ",num_runs,": constructing model A")
+    c_A = reinitialise_network(modelA, X, Y,
+                               return_cost_vector = True,
+                               adjust_regions = False,
+                               adjust_variance = False)
     print([run,c_A],file=open(str(experiment_number)+"_cost_A.log",'+a'))
     modelA = modelA.to(device)
-    print("====================",c_A,"====================")
 
     modelB = MaxoutNet().to(device) # rescaling only
-    c_B = reinitialise_network(modelB, X, Y, adjust_regions = False, adjust_variance = True)
+    print("run ",run+1," of ",num_runs,": constructing model B")
+    c_B = reinitialise_network(modelB, X, Y,
+                               return_cost_vector = True,
+                               adjust_regions = False,
+                               adjust_variance = True)
     print([run,c_B],file=open(str(experiment_number)+"_cost_B.log",'+a'))
     modelB = modelB.to(device)
-    print("====================",c_B,"====================")
 
     modelC = MaxoutNet().to(device)  # redistricting + rescaling
-    c_C = reinitialise_network(modelC, X, Y, adjust_regions = True, adjust_variance = True)
+    print("run ",run+1," of ",num_runs,": constructing model C")
+    c_C = reinitialise_network(modelC, X, Y,
+                               return_cost_vector = True,
+                               adjust_regions = True,
+                               adjust_variance = True)
     print([run,c_C],file=open(str(experiment_number)+"_cost_C.log",'+a'))
     modelC = modelC.to(device)
-    print("====================",c_C,"====================")
-
-    assert False
 
     modelD = None
+    # print("run ",run+1," of ",num_runs,": constructing model D")
     # c_D = reinitialise_network(modelC, X, Y, adjust_regions = False, adjust_variance = True)
     # print([run,c_D],file=open(str(experiment_number)+"_cost_D.log",'+a'))
     # modelD = modelD.to(device)
