@@ -74,11 +74,12 @@ def visualise(Ys, Ys_std=None):
         for Yi,Yi_std,colour_std in zip(Ys,Ys_std,colours_std):
             plt.fill_between(X, Yi+Yi_std, Yi-Yi_std, color=colour_std)
 
-experiment_numbers = ["533125786"]
-experiment_models = ["A", "B", "C", "D"]
-Ys = [[] for model in experiment_models] # accuracies
-Zs = [[] for model in experiment_models] # losses
-for experiment_number in experiment_numbers:
+#experiment_number = "491331889", "248360644"
+e = ["989642057"]
+models = ["A", "B", "C", "D"]
+Ys = [[] for model in models]
+Zs = [[] for model in models]
+for experiment_number in e:
 
     f = open(experiment_number+".log", "r")
     for i, l in enumerate(f):
@@ -89,8 +90,8 @@ for experiment_number in experiment_numbers:
             s = l.split(" ")
             num_epochs = int(s[2])
 
-    ys = compute_Ys(experiment_number, experiment_models, "acc", num_runs, num_epochs)
-    zs = compute_Ys(experiment_number, experiment_models, "loss", num_runs, num_epochs)
+    ys = compute_Ys(experiment_number, models, "acc", num_runs, num_epochs)
+    zs = compute_Ys(experiment_number, models, "loss", num_runs, num_epochs)
     if len(Ys[0])==0:
         Ys = [np.array(yi) for yi in ys]
         Zs = [np.array(zi) for zi in zs]
@@ -105,7 +106,7 @@ Ys = [Yi.mean(axis=0) for Yi in Ys]
 Zs = [Zi.mean(axis=0) for Zi in Zs]
 
 plt.figure(0)
-visualise(Ys)#, Ys_std)
+visualise(Ys, Ys_std)
 plt.figure(1)
-visualise(Zs)#, Zs_std)
+visualise(Zs, Zs_std)
 plt.show()

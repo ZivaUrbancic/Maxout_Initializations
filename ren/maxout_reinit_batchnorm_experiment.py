@@ -114,65 +114,6 @@ mySoftmax = torch.nn.Softmax(dim=0)
 class MaxoutNet(nn.Module):
     def __init__(self):
         super(MaxoutNet, self).__init__()
-        self.lay1lin1 = nn.Linear(n0, n1)
-        self.lay1lin2 = nn.Linear(n0, n1)
-        self.lay1lin3 = nn.Linear(n0, n1)
-        self.lay1lin4 = nn.Linear(n0, n1)
-        self.lay1lin5 = nn.Linear(n0, n1)
-        self.lay1lin6 = nn.Linear(n0, n1)
-        self.lay1lin7 = nn.Linear(n0, n1)
-        self.lay2lin1 = nn.Linear(n1, n2)
-        self.lay2lin2 = nn.Linear(n1, n2)
-        self.lay2lin3 = nn.Linear(n1, n2)
-        self.lay2lin4 = nn.Linear(n1, n2)
-        self.lay2lin5 = nn.Linear(n1, n2)
-        self.lay2lin6 = nn.Linear(n1, n2)
-        self.lay2lin7 = nn.Linear(n1, n2)
-        self.lay3lin1 = nn.Linear(n2, n3)
-        self.lay3lin2 = nn.Linear(n2, n3)
-        self.lay3lin3 = nn.Linear(n2, n3)
-        self.lay3lin4 = nn.Linear(n2, n3)
-        self.lay3lin5 = nn.Linear(n2, n3)
-        self.lay3lin6 = nn.Linear(n2, n3)
-        self.lay3lin7 = nn.Linear(n2, n3)
-        self.maxout_rank = 7
-
-
-    def forward(self, x):
-        x = x.view(x.size(0), -1) # size: batch_size * n0
-        X = torch.stack( [self.lay1lin1(x),
-                          self.lay1lin2(x),
-                          self.lay1lin3(x),
-                          self.lay1lin4(x),
-                          self.lay1lin5(x),
-                          self.lay1lin6(x),
-                          self.lay1lin7(x)])
-                                  # size: maxout_rank * batch_size * n1
-        x,_ = torch.max(X,0)      # size: batch_size * n1
-        X = torch.stack( [self.lay2lin1(x),
-                          self.lay2lin2(x),
-                          self.lay2lin3(x),
-                          self.lay2lin4(x),
-                          self.lay2lin5(x),
-                          self.lay2lin6(x),
-                          self.lay2lin7(x)])
-                                  # size: maxout_rank * batch_size * n2
-        x,_ = torch.max(X,0)      # size: batch_size * n2
-        X = torch.stack( [self.lay3lin1(x),
-                          self.lay3lin2(x),
-                          self.lay3lin3(x),
-                          self.lay3lin4(x),
-                          self.lay3lin5(x),
-                          self.lay3lin6(x),
-                          self.lay3lin7(x)])
-                                  # size: maxout_rank * batch_size * n3
-        x,_ = torch.max(X,0)      # size: batch_size * n3
-        # x = mySoftmax(x) # wth does this make loss worse?
-        return x
-
-class MaxoutFlexNet(nn.Module):
-    def __init__(self):
-        super(MaxoutFlexNet, self).__init__()
         self.lay1 = nn.ModuleList([nn.Linear(n0, n1) for i in range(network_rank)])
         self.lay2 = nn.ModuleList([nn.Linear(n1, n2) for i in range(network_rank)])
         self.lay3 = nn.ModuleList([nn.Linear(n2, n3) for i in range(network_rank)])
@@ -193,9 +134,37 @@ class MaxoutFlexNet(nn.Module):
         # x = mySoftmax(x) # wth does this make loss worse?
         return x
 
+class MaxoutBatchnormNet(nn.Module):
+    def __init__(self):
+        super(MaxoutBatchnormNet, self).__init__()
+        self.lay1 = nn.ModuleList([nn.Linear(n0, n1) for i in range(network_rank)])
+        self.lay2 = nn.ModuleList([nn.Linear(n1, n2) for i in range(network_rank)])
+        self.lay3 = nn.ModuleList([nn.Linear(n2, n3) for i in range(network_rank)])
+        self.bn1 = nn.BatchNorm1d(n1)
+        self.bn2 = nn.BatchNorm1d(n2)
+        self.bn3 = nn.BatchNorm1d(n3)
+        self.maxout_rank = network_rank
+
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1) # size: batch_size * n0
+        X = torch.stack( [self.bn1(lin(x)) for lin in self.lay1] )
+                                  # size: network_rank * batch_size * n1
+        x,_ = torch.max(X,0)      # size: batch_size * n1
+        X = torch.stack( [self.bn2(lin(x)) for lin in self.lay2] )
+                                  # size: network_rank * batch_size * n2
+        x,_ = torch.max(X,0)      # size: batch_size * n2
+        X = torch.stack( [self.bn3(lin(x)) for lin in self.lay3] )
+                                  # size: network_rank * batch_size * n3
+        x,_ = torch.max(X,0)      # size: batch_size * n3
+        # x = mySoftmax(x) # wth does this make loss worse?
+        return x
+
+
 ###
 # Running experiments
 ###
+modelDefault = MaxoutNet().to(device)
 print("activation: maxout\n",
       "rank:",network_rank,"\n",
       "hidden layers: 2\n",
@@ -217,17 +186,17 @@ for run in range(num_runs):
     # (set models to None if not needed, e.g. 'modelC = None'
     ###
     print("run ",run+1," of ",num_runs,": reinitialising")
-    modelA = MaxoutNet().to(device)     # maxout_rank hardcoded
-    # reinitialise_network(modelA, X, Y, adjust_regions = True, adjust_variance = False)
-    # modelA = modelA.to(device)
+    modelA = MaxoutBatchnormNet().to(device) # batchnorm only
+    reinitialise_network(modelA, X, Y, adjust_regions = True, adjust_variance = False)
+    modelA = modelA.to(device)
 
-    modelB = MaxoutFlexNet().to(device) # maxout_rank flexible
-    # reinitialise_network(modelB, X, Y, adjust_regions = True, adjust_variance = False)
-    # modelB = modelB.to(device)
+    modelB = MaxoutNet().to(device)          # rescale only
+    reinitialise_network(modelB, X, Y, adjust_regions = True, adjust_variance = True)
+    modelB = modelB.to(device)
 
-    modelC = None                       #
-    # c_reinit = reinitialise_network(modelC, X, Y, adjust_regions = True, adjust_variance = False)
-    # modelC = modelC.to(device)
+    modelC = MaxoutBatchnormNet().to(device)  # rescale + batchnorm
+    c_reinit = reinitialise_network(modelC, X, Y, adjust_regions = True, adjust_variance = True)
+    modelC = modelC.to(device)
     # print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 
 
