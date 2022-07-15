@@ -611,7 +611,7 @@ def k_th_largest_region_cost(C,k):
 #             return y1
 #         y = y1
 
-def reinitialise_network(model, X, Y, adjust_regions = True, adjust_variance = True):
+def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
@@ -621,6 +621,7 @@ def reinitialise_network(model, X, Y, adjust_regions = True, adjust_variance = T
         if type(child)==torch.nn.modules.conv.Conv1d or type(child)==torch.nn.modules.conv.Conv2d:
             print("Reinitialising layer", l,"of type Conv1d or Conv2d")
             X, R, C = reinitialise_conv_layer(child, X, Y, R, C,
+                                              # return_cost_vector = return_cost_vector, # todo?
                                               adjust_regions = adjust_regions,
                                               adjust_variance = adjust_variance)
 
@@ -632,12 +633,14 @@ def reinitialise_network(model, X, Y, adjust_regions = True, adjust_variance = T
             if type(child)==torch.nn.modules.linear.Linear:
                 print("Reinitialising layer", l,"of type ReLU")
                 X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
+                                              # return_cost_vector = return_cost_vector, # todo?
                                               adjust_regions = adjust_regions,
                                               adjust_variance = adjust_variance)
 
             elif type(child)==torch.nn.modules.container.ModuleList:
                 print("Reinitialising layer", l,"of type Maxout")
                 X, R, C = reinitialise_maxout_layer(child, X, Y, R, C,
+                                                    return_cost_vector = return_cost_vector,
                                                     adjust_regions = adjust_regions,
                                                     adjust_variance = adjust_variance)
 
@@ -647,7 +650,7 @@ def reinitialise_network(model, X, Y, adjust_regions = True, adjust_variance = T
 
     return C
 
-def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjust_variance = True):
+def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
         assert R == False and C == False
@@ -656,14 +659,38 @@ def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjus
 
     maxout_rank = len(children)
     number_of_classes=max(Y)+1
-    # step 0: check whether maxout_rank > number of regions
 
-    if k_th_largest_region_cost(C, maxout_rank-2) == 0 or adjust_regions == False:
-        stage = 2
-    elif k_th_largest_region_cost(C, maxout_rank - 2) == -1:
-        stage = 0
+    # step 0: check whether maxout_rank > number of regions
+    c = k_th_largest_region_cost(C, maxout_rank-2)
+
+    if not adjust_regions:
+        # no adjusting regions, go to stage 0 or 2 depending on whether
+        # cost vector needs to be computed
+        if return_cost_vector:
+            stage = 0
+        else:
+            stage = 2
     else:
-        stage = 1
+        if return_cost_vector:
+            # adjusting regions and cost vector needs to be computed,
+            # go to stage 1 if k_th_largest_region has positive cost (= region adjustments necessary)
+            # go to stage 0 otherwise
+            if c > 0:
+                stage = 1
+            else:
+                stage = 0
+        else:
+            # adjusting regions and cost vector needs to be computed,
+            # go to stage 1 if k_th_largest_region has positive cost (= region adjustments necessary)
+            # go to stage 2 if k_th_largest_region has 0 cost (= region adjustments done)
+            # go to stage 0 if k_th_largest_region has negative cost (more regions required before adjustments)
+            if c > 0:
+                stage = 1
+            if c == -1:
+                stage = 0
+            if c == 0:
+                stage = 2
+
 
     # step 1: reintialise parameters
     for k in range(children[0].out_features):
@@ -681,9 +708,9 @@ def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjus
                                             number_of_classes)
 
             k_cost = k_th_largest_region_cost(C, maxout_rank - 2)
-            if k_cost > 0: # returns false if number of regions < maxout_rank - 2
+            if adjust_regions and k_cost > 0: # returns false if number of regions < maxout_rank - 2
                 stage = 1
-            if k_cost == 0: # returns false if number of regions < maxout_rank - 2
+            if not return_cost_vector and k_cost == 0: # returns false if number of regions < maxout_rank - 2
                 stage = 2
 
         # stage 1:
@@ -704,10 +731,13 @@ def reinitialise_maxout_layer(children, X, Y, R, C, adjust_regions = True, adjus
                     child.bias[k] = nn.Parameter(torch.tensor(wb[j][-1]))
 
             if k_th_largest_region_cost(C, maxout_rank - 2) == 0:
-                stage = 2
+                if not return_cost_vector:
+                    stage = 2
+                else:
+                    stage = 0
 
         # stage 2:
-        # all regions have cost 0, keep remaining parameters
+        # all regions have cost 0, keep remaining parameters, no need to compute cost vector
         elif stage == 2:
             print("keeping unit",k,"onwards")
             R = []
