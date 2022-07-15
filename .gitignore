@@ -136,3 +136,9 @@ dmypy.json
 
 # Temporary files
 *temp.py
+
+# Data files
+data/cifar-10-batches-py/
+data/MNIST/raw
+maxoutMNIST.pth
+SpeechCommands
