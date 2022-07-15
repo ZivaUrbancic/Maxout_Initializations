@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Profiler
+*.prof
+
+# Zip files
+*.tar.gz
+
+# Temporary files
+*temp.py
