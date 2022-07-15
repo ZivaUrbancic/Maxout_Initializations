@@ -62,21 +62,20 @@ def visualiseOld3(Y1, Y2, Y3, Y1_std=None, Y2_std=None, Y3_std=None):
         plt.fill_between(X, Y2-Y2_std, Y2+Y2_std, color="navajowhite")
         plt.fill_between(X, Y3-Y3_std, Y3+Y3_std, color="navajowhite")
 
-def visualise(Ys, Ys_std=None):
+def visualise(ax, Ys, Ys_std=None):
     X = np.linspace(0, num_epochs, num=len(Ys[1]))
     colours = ["red","blue","green","darkorange"]
-    colours_std = ["mistyrose","lightskyblue","palegreen","bisque"]
 
     for Yi,colour in zip(Ys,colours):
-        plt.plot(X, Yi, colour)
+        ax.plot(X, Yi, colour)
 
     if Ys_std != None:
-        for Yi,Yi_std,colour_std in zip(Ys,Ys_std,colours_std):
-            plt.fill_between(X, Yi+Yi_std, Yi-Yi_std, color=colour_std)
+        for Yi,Yi_std,colour in zip(Ys,Ys_std,colours):
+            ax.fill_between(X, Yi+Yi_std, Yi-Yi_std, color=colour, alpha=0.3)
 
 #experiment_number = "491331889", "248360644"
-e = ["989642057"]
-models = ["A", "B", "C", "D"]
+e = ["926647012"]
+models = ["A", "B", "C"]
 Ys = [[] for model in models]
 Zs = [[] for model in models]
 for experiment_number in e:
@@ -105,8 +104,13 @@ Zs_std = [np.array(Zi).std(axis=0) for Zi in Zs]
 Ys = [Yi.mean(axis=0) for Yi in Ys]
 Zs = [Zi.mean(axis=0) for Zi in Zs]
 
-plt.figure(0)
-visualise(Ys, Ys_std)
-plt.figure(1)
-visualise(Zs, Zs_std)
+fig,axY = plt.subplots()
+
+axY.set_ylim([0,100])
+visualise(axY, Ys, Ys_std)
+
+fig,axZ = plt.subplots()
+axZ.set_ylim([0,6])
+visualise(axZ, Zs, Zs_std)
+
 plt.show()
