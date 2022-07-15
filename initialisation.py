@@ -918,15 +918,15 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
     return X, R, C
 
 
-X = torch.zeros((20,3,10,10))
-for d in range(20):
-    for c in range(3):
-        for y in range(10):
-            for x in range(10):
-                X[d,c,y,x] = 1000*(d+1) + 100*c + 10*y +x
-Y = np.random.randint(0,5,20)
+# X = torch.zeros((20,3,10,10))
+# for d in range(20):
+#     for c in range(3):
+#         for y in range(10):
+#             for x in range(10):
+#                 X[d,c,y,x] = 1000*(d+1) + 100*c + 10*y +x
+# Y = np.random.randint(0,5,20)
 
-reinitialise_conv_layer(child, X, Y);
+# reinitialise_conv_layer(child, X, Y);
 
 
 

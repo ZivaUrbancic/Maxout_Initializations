@@ -30,8 +30,8 @@ import numpy as np
 #  from sklearn.decomposition import PCA
 #  pca = PCA(n_components=2)
 #  X = pca.fit_transform(X)
-X = np.load("MNISTprojected.npy")
-Xlabels = np.load("MNISTlabels.npy")
+# X = np.load("MNISTprojected.npy")
+# Xlabels = np.load("MNISTlabels.npy")
 
 # loads N points from each class
 def sample_MNIST(train_dataset,N,random=False):
