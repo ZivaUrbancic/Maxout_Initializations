@@ -626,26 +626,30 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                                               adjust_variance = adjust_variance)
 
         else:
-            # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
-            if len(X.shape)>2:
-                X = np.array([x.flatten() for x in X])
-
             if type(child)==torch.nn.modules.linear.Linear:
+                # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
                 print("Reinitialising layer", l,"of type ReLU")
+                if len(X.shape)>2:
+                    X = np.array([x.flatten() for x in X])
                 X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
                                               # return_cost_vector = return_cost_vector, # todo?
                                               adjust_regions = adjust_regions,
                                               adjust_variance = adjust_variance)
 
             elif type(child)==torch.nn.modules.container.ModuleList:
+                # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
                 print("Reinitialising layer", l,"of type Maxout")
+                if len(X.shape)>2:
+                    X = np.array([x.flatten() for x in X])
                 X, R, C = reinitialise_maxout_layer(child, X, Y, R, C,
                                                     return_cost_vector = return_cost_vector,
                                                     adjust_regions = adjust_regions,
                                                     adjust_variance = adjust_variance)
 
             else:
-                print("Ignoring child of type", type(child))
+                print("Applying child of type", type(child), "without reinitialising")
+                print(X.shape)
+                X = child(torch.tensor(X)).numpy()
                 # todo: check if layer supported, print warning if not
 
     return C
@@ -866,30 +870,21 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
         X = torch.from_numpy(X.astype('float32'))
 
     if type(child) == torch.nn.modules.conv.Conv2d:
-        child1 = nn.Conv2d(child.in_channels,
-                       child.out_channels,
-                       child.kernel_size,
-                       child.stride,
-                       child.padding,
-                       child.dilation,
-                       child.groups,
-                       False,
-                       child.padding_mode)
-        X1 = child1(X).detach().numpy()
-        X2 = X1.mean(axis = (-2,-1))
+        child.bias = nn.Parameter(torch.zeros(child.bias.shape))
+        X1 = child(X).detach().numpy()
+        M = X1.mean(axis = (-2,-1))
 
-    elif type(child) == torch.nn.modules.conv.Conv1d:
-        child1 = nn.Conv1d(child.in_channels,
-                       child.out_channels,
-                       child.kernel_size,
-                       child.stride,
-                       child.padding,
-                       child.dilation,
-                       child.groups,
-                       False,
-                       child.padding_mode)
-        X1 = child1(X).detach().numpy()
-        X2 = X1.mean(axis = -1)
+    # elif type(child) == torch.nn.modules.conv.Conv1d:
+    #     child1 = nn.Conv1d(child.in_channels,
+    #                    child.out_channels,
+    #                    child.kernel_size,
+    #                    child.stride,
+    #                    child.padding,
+    #                    child.dilation,
+    #                    child.groups,
+    #                    False,
+    #                    child.padding_mode)
+    #     M = child1(X).detach().numpy().mean(axis = -1)
 
     else:
         raise TypeError('Child must be nn.Conv1d or nn.Conv2d')
@@ -910,11 +905,11 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
         # below certain size
         if stage == 1:
             print("reinitialising channel", k)
-            wb = hyperplanes_through_largest_regions(X2, R, C, w = unit_vecs[k])
+            wb = hyperplanes_through_largest_regions(M, R, C, w = unit_vecs[k])
 
             R, C = update_regions_and_costs(R, C,
                                             [linear(wbj) for wbj in wb],
-                                            X2, Y, CE_region_cost,
+                                            M, Y, CE_region_cost,
                                             number_of_classes)
 
             with torch.no_grad():
