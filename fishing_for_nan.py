@@ -7,7 +7,6 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
 import numpy as np
-import random
 
 exec(open("mnist.py").read())
 exec(open("initialisation.py").read())
@@ -122,7 +121,7 @@ print("activation: maxout\n",
       file=open(str(experiment_number)+".log",'+a'))
 
 run = -1
-seed = random(0, 9999999)
+seed = np.random.randint(0, 9999999)
 while True:
     run += 1
     seed += 1
