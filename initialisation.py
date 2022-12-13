@@ -870,7 +870,7 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
         X = torch.from_numpy(X.astype('float32'))
 
     if type(child) == torch.nn.modules.conv.Conv2d:
-        child.bias = nn.Parameter(torch.zeros(child.bias.shape))
+        # child.bias = nn.Parameter(torch.zeros(child.bias.shape))
         X1 = child(X).detach().numpy()
         M = X1.mean(axis = (-2,-1))
 
@@ -913,7 +913,7 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
                                             number_of_classes)
 
             with torch.no_grad():
-                child.bias[k] = nn.Parameter(torch.tensor(wb[1][-1]))
+                child.bias[k] -= nn.Parameter(torch.tensor(wb[1][-1]))
 
             if k_th_largest_region_cost(C, 0) == 0:
                 stage = 2
