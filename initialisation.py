@@ -863,9 +863,6 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
         R = initialise_region_matrix(N)
         C = initialise_costs_vector(N)
 
-    if adjust_regions == False and adjust_variance == False:
-        return X, R, C
-
     if type(X) == np.ndarray:
         X = torch.from_numpy(X.astype('float32'))
 
