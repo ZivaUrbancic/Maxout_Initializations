@@ -17,12 +17,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 2
-num_epochs = 6
+num_runs = 1
+num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
-network_size = "large" # "small" or "large"
+network_size = "small" # "small" or "large"
 
 
 
@@ -169,11 +169,23 @@ for run in range(num_runs):
     modelRescale = ReLUBatchNormNet().to(device) # reinit + batchnorm
     modelReinit = ReLUNet().to(device) # reinit + our rescaling
 
-    reinitialise_network(modelRescale, X, Y, adjust_regions = True, adjust_variance = False)
+    c_default = reinitialise_network(modelDefault, X, Y,
+                                     return_cost_vector = True,
+                                     adjust_regions = False,
+                                     adjust_variance = False)
+    modelDefault = modelDefault.to(device)
+
+    c_rescale = reinitialise_network(modelRescale, X, Y,
+                                     return_cost_vector = True,
+                                     adjust_regions = False,
+                                     adjust_variance = True)
     modelRescale = modelRescale.to(device)
 
     print("run ",run+1," of ",num_runs,": reinitialising")
-    c_reinit = reinitialise_network(modelReinit, X, Y, adjust_regions = True, adjust_variance = True)
+    c_reinit = reinitialise_network(modelReinit, X, Y,
+                                    return_cost_vector=True,
+                                    adjust_regions = True,
+                                    adjust_variance = True)
     modelReinit = modelReinit.to(device)
     print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
 

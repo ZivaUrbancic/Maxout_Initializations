@@ -615,16 +615,17 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
+    compressedCostVectors = []
 
     for l, child in enumerate(model.children()):
 
         if type(child)==torch.nn.modules.conv.Conv1d or type(child)==torch.nn.modules.conv.Conv2d:
             print("Reinitialising layer", l,"of type Conv1d or Conv2d")
             X, R, C = reinitialise_conv_layer(child, X, Y, R, C,
-                                              # return_cost_vector = return_cost_vector, # todo?
+                                              # return_cost_vector = return_cost_vector, # todo? no!
                                               adjust_regions = adjust_regions,
                                               adjust_variance = adjust_variance)
-
+            compressedCostVectors.append(compress_region_cost_vector(C))
         else:
             if type(child)==torch.nn.modules.linear.Linear:
                 # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
@@ -632,10 +633,10 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                 if len(X.shape)>2:
                     X = np.array([x.flatten() for x in X])
                 X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
-                                              # return_cost_vector = return_cost_vector, # todo?
+                                              return_cost_vector = return_cost_vector,
                                               adjust_regions = adjust_regions,
                                               adjust_variance = adjust_variance)
-
+                compressedCostVectors.append(compress_region_cost_vector(C))
             elif type(child)==torch.nn.modules.container.ModuleList:
                 # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
                 print("Reinitialising layer", l,"of type Maxout")
@@ -645,16 +646,17 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                                                     return_cost_vector = return_cost_vector,
                                                     adjust_regions = adjust_regions,
                                                     adjust_variance = adjust_variance)
-
+                compressedCostVectors.append(compress_region_cost_vector(C))
             else:
                 print("Applying child of type", type(child), "without reinitialising")
                 print(X.shape)
-                X = child(torch.tensor(X)).numpy()
+                X = child(torch.tensor(X)).detach().numpy()
                 # todo: check if layer supported, print warning if not
 
     return C
 
-def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
+def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
+
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
         assert R == False and C == False
@@ -662,11 +664,12 @@ def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, 
         C = initialise_costs_vector(N)
 
     maxout_rank = len(children)
-    number_of_classes=max(Y)+1
+    number_of_classes = len(set(Y))
+    # code above changed from:
+    # number_of_classes=max(Y)+1
+    assert number_of_classes == max(Y)+1
 
     # step 0: check whether maxout_rank > number of regions
-    c = k_th_largest_region_cost(C, maxout_rank-2)
-
     if not adjust_regions:
         # no adjusting regions, go to stage 0 or 2 depending on whether
         # cost vector needs to be computed
@@ -675,6 +678,7 @@ def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, 
         else:
             stage = 2
     else:
+        c = k_th_largest_region_cost(C, maxout_rank-2)
         if return_cost_vector:
             # adjusting regions and cost vector needs to be computed,
             # go to stage 1 if k_th_largest_region has positive cost (= region adjustments necessary)
@@ -684,7 +688,7 @@ def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, 
             else:
                 stage = 0
         else:
-            # adjusting regions and cost vector needs to be computed,
+            # adjusting regions and cost vector need not be computed,
             # go to stage 1 if k_th_largest_region has positive cost (= region adjustments necessary)
             # go to stage 2 if k_th_largest_region has 0 cost (= region adjustments done)
             # go to stage 0 if k_th_largest_region has negative cost (more regions required before adjustments)
@@ -699,8 +703,9 @@ def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, 
     # step 1: reintialise parameters
     for k in range(children[0].out_features):
         # stage 0:
-        # not enough regions for running special reinitialisation routines
-        # keep existing parameters until enough regions are instantiated
+        #   not running reinitialisation routines, but still computing region matrix + cost vector
+        #   (either because of not enough regions to run reinitialisation routines,
+        #    or because adjust_regions==false and return_cost_vector==true)
         if stage == 0:
             print("keeping unit", k)
             w = [child.weight[k,:].detach().numpy() for child in children]
@@ -712,19 +717,17 @@ def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, 
                                             number_of_classes)
 
             k_cost = k_th_largest_region_cost(C, maxout_rank - 2)
-            if adjust_regions and k_cost > 0: # returns false if number of regions < maxout_rank - 2
+            if adjust_regions and k_cost > 0:
                 stage = 1
-            if not return_cost_vector and k_cost == 0: # returns false if number of regions < maxout_rank - 2
+            if not return_cost_vector and k_cost == 0:
                 stage = 2
 
         # stage 1:
-        # use special reinitialisation routines until regions fall below certain size
+        #   use special reinitialisation routines until all regions have cost 0
         elif stage == 1:
             print("reinitialising unit", k)
             wb = hyperplanes_through_largest_regions(X, R, C,
                                                      maxout = maxout_rank)
-
-
             R, C = update_regions_and_costs(R, C,
                                             [linear(wbj) for wbj in wb],
                                             X, Y, CE_region_cost,
@@ -735,17 +738,17 @@ def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, 
                     child.bias[k] = nn.Parameter(torch.tensor(wb[j][-1]))
 
             if k_th_largest_region_cost(C, maxout_rank - 2) == 0:
-                if not return_cost_vector:
-                    stage = 2
-                else:
+                if return_cost_vector:
                     stage = 0
+                else:
+                    stage = 2
 
         # stage 2:
-        # all regions have cost 0, keep remaining parameters, no need to compute cost vector
+        # all regions have cost 0, keep remaining parameters, and no need to compute cost vector
         elif stage == 2:
             print("keeping unit",k,"onwards")
-            R = []
-            C = []
+            R = False
+            C = False
             break
 
 
@@ -768,7 +771,7 @@ def reinitialise_maxout_layer(children, X, Y, R, C, return_cost_vector = False, 
     return X, R, C
 
 
-def reinitialise_relu_layer(child, X, Y, R = False, C = False, adjust_regions = True, adjust_variance = True):
+def reinitialise_relu_layer(child, X, Y, R = False, C = False, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
 
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
@@ -778,36 +781,60 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, adjust_regions = 
 
     number_of_classes = len(set(Y))
     # step 0: check whether maxout_rank > number of regions
-    if k_th_largest_region_cost(C, 0) == 0 or adjust_regions == False:
-        stage = 2
-    elif k_th_largest_region_cost(C, 0) == -1:
-        stage = 0
+    if not adjust_regions:
+        # no adjusting regions, go to stage 0 or 2 depending on whether
+        # cost vector needs to be computed
+        if return_cost_vector:
+            stage = 0
+        else:
+            stage = 2
     else:
-        stage = 1
+        c = k_th_largest_region_cost(C,0)
+        if return_cost_vector:
+            # adjusting regions and cost vector needs to be computed,
+            # go to stage 1 if k_th_largest_region has positive cost (= region adjustments necessary)
+            # go to stage 0 otherwise
+            if c > 0:
+                stage = 1
+            else:
+                stage = 0
+        else:
+            # adjusting regions and cost vector need not be computed,
+            # go to stage 1 if k_th_largest_region has positive cost (= region adjustments necessary)
+            # go to stage 2 if k_th_largest_region has 0 cost (= region adjustments done)
+            # go to stage 0 if k_th_largest_region has negative cost (more regions required before adjustments)
+            if c > 0:
+                stage = 1
+            if c == -1:
+                stage = 0
+            if c == 0:
+                stage = 2
+
 
     # step 1: reintialise parameters
     for k in range(child.out_features):
         # stage 0:
-        # not enough regions for running special reinitialisation routines
-        # keep existing parameters until enough regions are instantiated
+        #   not running reinitialisation routines, but still computing region matrix + cost vector
+        #   (either because of not enough regions to run reinitialisation routines,
+        #    or because adjust_regions==false and return_cost_vector==true)
         if stage == 0:
             print("keeping unit",k)
             w = child.weight[k,:].detach().numpy()
             b = child.bias[k].detach().numpy()
-            wb = np.concatenate((w[j], [b[j]]))
+            wb = np.concatenate((w, [b]))
             R, C = update_regions_and_costs(R, C,
                                             [linear(wb),zero],
                                             X, Y, CE_region_cost,
                                             number_of_classes)
 
             k_cost = k_th_largest_region_cost(C, 0)
-            if k_cost > 0: # returns false if number of regions < maxout_rank - 2
+            if adjust_regions and k_cost > 0:
                 stage = 1
-            if k_cost == 0: # returns false if number of regions < maxout_rank - 2
+            if k_cost == 0:
                 stage = 2
 
         # stage 1:
-        # use special reinitialisation routines until regions fall below certain size
+        #   use special reinitialisation routines until all regions have cost 0
         elif stage == 1:
             print("reinitialising unit",k)
             wb = hyperplanes_through_largest_regions(X, R, C)
@@ -820,14 +847,17 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, adjust_regions = 
                 child.bias[k] = nn.Parameter(torch.tensor(wb[1][-1]))
 
             if k_th_largest_region_cost(C, 0) == 0:
-                stage = 2
+                if return_cost_vector:
+                    stage = 0
+                else:
+                    stage = 2
 
         # stage 2:
         # all regions have cost 0, keep remaining parameters
         elif stage == 2:
             print("keeping unit",k,"onwards")
-            R = []
-            C = []
+            R = False
+            C = False
             break
 
 
@@ -845,11 +875,6 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, adjust_regions = 
         X = nn.ReLU()(child(torch.tensor(X))).numpy()
 
     return X, R, C
-
-
-child = nn.Conv2d(3, 6, (2,3), stride=1)
-
-assert child.bias != None
 
 
 
@@ -1092,3 +1117,47 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
 #         X = nn.ReLU()(child(X)).numpy()
 
 #     return X, R, C
+
+
+def compress_region_cost_vector(C):
+    if len(C)==0:
+        return C.copy()
+
+    compressedCostVector = []
+    currentRegionCost = C[0]
+    currentRegionCardinality = 1
+    for (j,costEntry) in enumerate(C[1:]):
+        if costEntry<0:
+            currentRegionCardinality += 1
+        else:
+            compressedCostEntryFound = False
+            # Loop through compressedCostVector to find entry with right cost and cardinality
+            for (i,compressedCostEntry) in enumerate(compressedCostVector):
+                if compressedCostEntry[0]==currentRegionCost and compressedCostEntry[1]==currentRegionCardinality:
+                    # if entry found, increment number of regions counter
+                    compressedCostVector[i][2] += 1
+                    compressedCostEntryFound = True
+                    # suggestion: move compressedCostVector entry up depending on number of regions
+                    #   so that more frequent entries are more to the front
+                    break
+            if compressedCostEntryFound == False:
+                # if entry not found, create new
+                compressedCostVector.append([currentRegionCost,currentRegionCardinality,1])
+            currentRegionCost = costEntry
+            currentRegionCardinality = 1
+
+    compressedCostEntryFound = False
+    # Loop through compressedCostVector to find entry with right cost and cardinality
+    for (i,compressedCostEntry) in enumerate(compressedCostVector):
+        if compressedCostEntry[0]==currentRegionCost and compressedCostEntry[1]==currentRegionCardinality:
+            # if entry found, increment number of regions counter
+            compressedCostVector[i][2] += 1
+            compressedCostEntryFound = True
+            # suggestion: move compressedCostVector entry up depending on number of regions
+            #   so that more frequent entries are more to the front
+            break
+    if compressedCostEntryFound == False:
+        # if entry not found, create new
+        compressedCostVector.append([currentRegionCost,currentRegionCardinality,1])
+
+    return compressedCostVector
