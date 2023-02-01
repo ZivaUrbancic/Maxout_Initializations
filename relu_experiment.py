@@ -7,6 +7,7 @@ import torchvision
 import torchvision.transforms as transforms
 import numpy as np
 import random
+from log_classes import *
 exec(open("mnist.py").read())
 exec(open("initialisation.py").read())
 np.set_printoptions(threshold=np.inf)
@@ -18,7 +19,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ###
 experiment_number = random.randint(0,999999999)
 num_runs = 1
-num_epochs = 2
+num_epochs = 1
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
@@ -149,24 +150,30 @@ class ReLUBatchNormNet(nn.Module):
 # Running experiments
 ###
 modelDefault = ReLUNet().to(device)
-print("activation: relu\n",
-      "rank: N/A\n",
-      "hidden layers: 2\n",
-      "widths:",n0,n1,n2,n3,"\n",
-      "dataset:",dataset,"\n",
-      "data_sample_size:",data_sample_size,"\n",
-      "num_runs:",num_runs,"\n",
-      "num_epochs",num_epochs,"\n",
-      file=open(str(experiment_number)+".log",'+a'))
+# print("activation: relu\n",
+#       "rank: N/A\n",
+#       "hidden layers: 2\n",
+#       "widths:",n0,n1,n2,n3,"\n",
+#       "dataset:",dataset,"\n",
+#       "data_sample_size:",data_sample_size,"\n",
+#       "num_runs:",num_runs,"\n",
+#       "num_epochs",num_epochs,"\n",
+#       file=open(str(experiment_number)+".log",'+a'))
+
+FileLog = Log()
 
 for run in range(num_runs):
+    runlogA = RunLog("mnist","small","relu",False,False,experiment_number=experiment_number)
+    runlogB = RunLog("mnist","small","relu",False,True,experiment_number=experiment_number)
+    runlogC = RunLog("mnist","small","relu",True,True,experiment_number=experiment_number)
+
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size,
                                                shuffle=True)
     X, Y = sample_dataset(train_dataset, train_loader, data_sample_size)
 
-    modelDefault = ReLUBatchNormNet().to(device) # no reinit + batchnorm
-    modelRescale = ReLUBatchNormNet().to(device) # reinit + batchnorm
+    modelDefault = ReLUNet().to(device) # no reinit + batchnorm
+    modelRescale = ReLUNet().to(device) # reinit + batchnorm
     modelReinit = ReLUNet().to(device) # reinit + our rescaling
 
     c_default = reinitialise_network(modelDefault, X, Y,
@@ -174,12 +181,14 @@ for run in range(num_runs):
                                      adjust_regions = False,
                                      adjust_variance = False)
     modelDefault = modelDefault.to(device)
+    runlogA.record_cost_vector(-1,-1,c_default)
 
     c_rescale = reinitialise_network(modelRescale, X, Y,
                                      return_cost_vector = True,
                                      adjust_regions = False,
                                      adjust_variance = True)
     modelRescale = modelRescale.to(device)
+    runlogB.record_cost_vector(-1,-1,c_rescale)
 
     print("run ",run+1," of ",num_runs,": reinitialising")
     c_reinit = reinitialise_network(modelReinit, X, Y,
@@ -187,16 +196,12 @@ for run in range(num_runs):
                                     adjust_regions = True,
                                     adjust_variance = True)
     modelReinit = modelReinit.to(device)
-    print([run,c_reinit],file=open(str(experiment_number)+"_cost_reinit.log",'+a'))
+    runlogC.record_cost_vector(-1,-1,c_reinit)
 
     criterion = nn.CrossEntropyLoss()
-    optimizerDefault = torch.optim.SGD(modelDefault.parameters(), lr=learning_rate)
-    optimizerRescale = torch.optim.SGD(modelRescale.parameters(), lr=learning_rate)
-    optimizerReinit = torch.optim.SGD(modelReinit.parameters(), lr=learning_rate)
-
-    log_loss_default = []
-    log_loss_rescale = []
-    log_loss_reinit = []
+    optimizerDefault = torch.optim.Adam(modelDefault.parameters())
+    optimizerRescale = torch.optim.Adam(modelRescale.parameters())
+    optimizerReinit = torch.optim.Adam(modelReinit.parameters())
 
     print("run ",run+1," of ",num_runs,": training")
     n_total_steps = len(train_loader)
@@ -224,8 +229,13 @@ for run in range(num_runs):
             lossReinit.backward()
             optimizerReinit.step()
 
-            if (i+1) % 10 == 0:
+            # in each epoch, the step counter i goes from 0 to 599
+            if (i+1) % 60 == 0:
+                print("    logging accuracies at step ",i+1)
 
+                ###
+                # log accuracies every 60th step, i.e., 10 times per epoch
+                ###
                 with torch.no_grad():
                     n_correct_default = 0
                     n_correct_rescale = 0
@@ -262,16 +272,37 @@ for run in range(num_runs):
                                 n_class_correct_reinit[label] += 1
                             n_class_samples[label] += 1
 
-                    acc_default = [100 * n_correct_default / n_samples]
-                    acc_rescale = [100 * n_correct_rescale / n_samples]
-                    acc_reinit = [100 * n_correct_reinit / n_samples]
-                    acc_default += [n_class_correct_default[j] / n_class_samples[j] for j in range(10)]
-                    acc_rescale += [n_class_correct_rescale[j] / n_class_samples[j] for j in range(10)]
-                    acc_reinit += [n_class_correct_reinit[j] / n_class_samples[j] for j in range(10)]
+                    acc_default = [round(n_correct_default / n_samples,3)]
+                    acc_rescale = [round(n_correct_rescale / n_samples,3)]
+                    acc_reinit = [round(n_correct_reinit / n_samples,3)]
+                    acc_default += [round(n_class_correct_default[j] / n_class_samples[j],3) for j in range(10)]
+                    acc_rescale += [round(n_class_correct_rescale[j] / n_class_samples[j],3) for j in range(10)]
+                    acc_reinit += [round(n_class_correct_reinit[j] / n_class_samples[j],3) for j in range(10)]
 
-                    print([[run,epoch,i],[lossDefault.item()]],file=open(str(experiment_number)+"_loss_default.log",'+a'))
-                    print([[run,epoch,i],[lossRescale.item()]],file=open(str(experiment_number)+"_loss_rescale.log",'+a'))
-                    print([[run,epoch,i],[lossReinit.item()]],file=open(str(experiment_number)+"_loss_reinit.log",'+a'))
-                    print([[run,epoch,i],acc_default],file=open(str(experiment_number)+"_acc_default.log",'+a'))
-                    print([[run,epoch,i],acc_rescale],file=open(str(experiment_number)+"_acc_rescale.log",'+a'))
-                    print([[run,epoch,i],acc_reinit],file=open(str(experiment_number)+"_acc_reinit.log",'+a'))
+                    runlogA.record_accuracies(epoch,i+1,acc_default)
+                    runlogB.record_accuracies(epoch,i+1,acc_rescale)
+                    runlogC.record_accuracies(epoch,i+1,acc_reinit)
+                    runlogA.record_losses(epoch,i+1,round(lossDefault.item(),3))
+                    runlogB.record_losses(epoch,i+1,round(lossRescale.item(),3))
+                    runlogC.record_losses(epoch,i+1,round(lossReinit.item(),3))
+
+
+            ###
+            # log accuracies every 300th step, i.e., 2 times per epoch
+            ###
+            if (i+1) % 300 == 0:
+                print("    logging linear regions at step ",i+1)
+
+                cost_default = reinitialise_network(modelDefault, X, Y, True, False, False)
+                cost_rescale = reinitialise_network(modelRescale, X, Y, True, False, False)
+                cost_reinit = reinitialise_network(modelReinit, X, Y, True, False, False)
+
+                runlogA.record_cost_vector(epoch,i+1,cost_default)
+                runlogB.record_cost_vector(epoch,i+1,cost_rescale)
+                runlogC.record_cost_vector(epoch,i+1,cost_reinit)
+
+    FileLog.add_runlog(runlogA)
+    FileLog.add_runlog(runlogB)
+    FileLog.add_runlog(runlogC)
+
+FileLog.save(experiment_number)

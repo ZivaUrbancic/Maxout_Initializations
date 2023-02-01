@@ -620,7 +620,8 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
     for l, child in enumerate(model.children()):
 
         if type(child)==torch.nn.modules.conv.Conv1d or type(child)==torch.nn.modules.conv.Conv2d:
-            print("Reinitialising layer", l,"of type Conv1d or Conv2d")
+            if adjust_regions or adjust_variance:
+                print("Reinitialising layer", l,"of type Conv1d or Conv2d")
             X, R, C = reinitialise_conv_layer(child, X, Y, R, C,
                                               # return_cost_vector = return_cost_vector, # todo? no!
                                               adjust_regions = adjust_regions,
@@ -629,7 +630,8 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
         else:
             if type(child)==torch.nn.modules.linear.Linear:
                 # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
-                print("Reinitialising layer", l,"of type ReLU")
+                if adjust_regions or adjust_variance:
+                    print("Reinitialising layer", l,"of type ReLU")
                 if len(X.shape)>2:
                     X = np.array([x.flatten() for x in X])
                 X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
@@ -639,7 +641,8 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                 compressedCostVectors.append(compress_region_cost_vector(C))
             elif type(child)==torch.nn.modules.container.ModuleList:
                 # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
-                print("Reinitialising layer", l,"of type Maxout")
+                if adjust_regions or adjust_variance:
+                    print("Reinitialising layer", l,"of type Maxout")
                 if len(X.shape)>2:
                     X = np.array([x.flatten() for x in X])
                 X, R, C = reinitialise_maxout_layer(child, X, Y, R, C,
@@ -648,12 +651,12 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                                                     adjust_variance = adjust_variance)
                 compressedCostVectors.append(compress_region_cost_vector(C))
             else:
-                print("Applying child of type", type(child), "without reinitialising")
-                print(X.shape)
+                if adjust_regions or adjust_variance:
+                    print("Applying child of type", type(child), "without reinitialising")
                 X = child(torch.tensor(X)).detach().numpy()
                 # todo: check if layer supported, print warning if not
 
-    return C
+    return compressedCostVectors
 
 def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
 
@@ -707,7 +710,8 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
         #   (either because of not enough regions to run reinitialisation routines,
         #    or because adjust_regions==false and return_cost_vector==true)
         if stage == 0:
-            print("keeping unit", k)
+            if adjust_regions:
+                print("keeping unit", k)
             w = [child.weight[k,:].detach().numpy() for child in children]
             b = [child.bias[k].detach().numpy() for child in children]
             wb = [np.concatenate((w[j], [b[j]])) for j in range(len(w))]
@@ -725,7 +729,8 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
         # stage 1:
         #   use special reinitialisation routines until all regions have cost 0
         elif stage == 1:
-            print("reinitialising unit", k)
+            if adjust_regions:
+                print("reinitialising unit", k)
             wb = hyperplanes_through_largest_regions(X, R, C,
                                                      maxout = maxout_rank)
             R, C = update_regions_and_costs(R, C,
@@ -746,7 +751,8 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
         # stage 2:
         # all regions have cost 0, keep remaining parameters, and no need to compute cost vector
         elif stage == 2:
-            print("keeping unit",k,"onwards")
+            if adjust_regions:
+                print("keeping unit",k,"onwards")
             R = False
             C = False
             break
@@ -818,7 +824,8 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, return_cost_vecto
         #   (either because of not enough regions to run reinitialisation routines,
         #    or because adjust_regions==false and return_cost_vector==true)
         if stage == 0:
-            print("keeping unit",k)
+            if adjust_regions:
+                print("keeping unit",k)
             w = child.weight[k,:].detach().numpy()
             b = child.bias[k].detach().numpy()
             wb = np.concatenate((w, [b]))
@@ -836,7 +843,8 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, return_cost_vecto
         # stage 1:
         #   use special reinitialisation routines until all regions have cost 0
         elif stage == 1:
-            print("reinitialising unit",k)
+            if adjust_regions:
+                print("reinitialising unit",k)
             wb = hyperplanes_through_largest_regions(X, R, C)
             R, C = update_regions_and_costs(R, C,
                                             [linear(wbj) for wbj in wb],
@@ -855,7 +863,8 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, return_cost_vecto
         # stage 2:
         # all regions have cost 0, keep remaining parameters
         elif stage == 2:
-            print("keeping unit",k,"onwards")
+            if adjust_regions:
+                print("keeping unit",k,"onwards")
             R = False
             C = False
             break
@@ -1124,12 +1133,13 @@ def compress_region_cost_vector(C):
         return C.copy()
 
     compressedCostVector = []
-    currentRegionCost = C[0]
+    currentRegionCost = round(C[0],3)
     currentRegionCardinality = 1
     for (j,costEntry) in enumerate(C[1:]):
         if costEntry<0:
             currentRegionCardinality += 1
         else:
+            costEntry = round(costEntry,3)
             compressedCostEntryFound = False
             # Loop through compressedCostVector to find entry with right cost and cardinality
             for (i,compressedCostEntry) in enumerate(compressedCostVector):
