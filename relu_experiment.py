@@ -18,8 +18,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 1
-num_epochs = 1
+num_runs = 24
+num_epochs = 24
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
@@ -203,10 +203,8 @@ for run in range(num_runs):
     optimizerRescale = torch.optim.Adam(modelRescale.parameters())
     optimizerReinit = torch.optim.Adam(modelReinit.parameters())
 
-    print("run ",run+1," of ",num_runs,": training")
     n_total_steps = len(train_loader)
     for epoch in range(num_epochs):
-        print("  epoch ",epoch+1," of ",num_epochs)
         for i, (images, labels) in enumerate(train_loader):
             images, labels = images.to(device), labels.to(device)
 
@@ -231,7 +229,8 @@ for run in range(num_runs):
 
             # in each epoch, the step counter i goes from 0 to 599
             if (i+1) % 60 == 0:
-                print("    logging accuracies at step ",i+1)
+                # print("run ",run+1,"/ ",num_runs,";  epoch ",epoch+1," / ",num_epochs)
+                # print("    logging accuracies at step ",i+1)
 
                 ###
                 # log accuracies every 60th step, i.e., 10 times per epoch
@@ -288,9 +287,10 @@ for run in range(num_runs):
 
 
             ###
-            # log accuracies every 300th step, i.e., 2 times per epoch
+            # log accuracies every 150th step, i.e., 4 times per epoch
             ###
-            if (i+1) % 300 == 0:
+            if (i+1) % 150 == 0:
+                print("run ",run+1,"/ ",num_runs,";  epoch ",epoch+1," / ",num_epochs)
                 print("    logging linear regions at step ",i+1)
 
                 cost_default = reinitialise_network(modelDefault, X, Y, True, False, False)
