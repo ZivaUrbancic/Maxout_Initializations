@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+import matplotlib.pyplot as plt
 
 import json
 
@@ -32,7 +33,7 @@ for training in data_log.dict['mnist']['small']['relu']:
         init_var.append(training)
 
 cost_vectors_std = [run['cost_vectors'] for run in init_std]
-cost_vectors_var = [run['cost_vectors'] for run in init_var]
+cost_vectors_std = [run['cost_vectors'] for run in init_var]
 cost_vectors_full = [run['cost_vectors'] for run in init_full]
 
 losses_std = [run['losses'] for run in init_std]
@@ -42,5 +43,52 @@ losses_full = [run['losses'] for run in init_full]
 accuracies_std = [run['accuracies'] for run in init_std]
 accuracies_var = [run['accuracies'] for run in init_var]
 accuracies_full = [run['accuracies'] for run in init_full]
-        
+
+def epoch_and_step_to_partial_epoch(runs):
+    new_list = []
+    for run in runs:
+        run_list = []
+        for epoch, step, value in run:
+            partial_epoch = epoch + step/600
+            run_list.append([partial_epoch, value])
+        new_list.append(np.array(run_list))
+    return new_list
+
+losses_std = epoch_and_step_to_partial_epoch(losses_std)
+losses_var = epoch_and_step_to_partial_epoch(losses_var)
+losses_full = epoch_and_step_to_partial_epoch(losses_full)
+# accuracies_std = epoch_and_step_to_partial_epoch(accuracies_std)
+# accuracies_var = epoch_and_step_to_partial_epoch(accuracies_var)
+# accuracies_full = epoch_and_step_to_partial_epoch(accuracies_full)
+
+#%%
+
+fig, ax = plt.subplots()
+
+plt.plot(losses_full[0][:,0], losses_full[0][:,1])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
