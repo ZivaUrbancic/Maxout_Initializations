@@ -78,10 +78,15 @@ class Log:
                 for rank in _ranks:
                     current = self.dict[dataset][size][rank]
                     updates = log.dict[dataset][size][rank]
+                    if len(updates) > 0:
+                        print('Appending', len(updates)//3 , 
+                              'runs of each initialisation routine for:', 
+                              dataset, size, rank)
                     for update in updates:
-                        if update['experiment_number'] in [c['experiment_number']
-                                                           for c in current]:
-                            print('This run of', dataset, size, rank,
-                                      'has already been added to this log')
-                        else:
-                            current.append(update)
+                        # print(update)
+                        # if update['experiment_number'] in [c['experiment_number']
+                        #                                    for c in current]:
+                        #     print('This run of', dataset, size, rank,
+                        #               'has already been added to this log')
+                        # else:
+                        current.append(update)
