@@ -167,10 +167,6 @@ for run in range(num_runs):
     runlogB = RunLog("mnist","small","relu",False,True,experiment_number=experiment_number)
     runlogC = RunLog("mnist","small","relu",True,True,experiment_number=experiment_number)
 
-    runlogAtest = RunLog("mnist","small","relu",False,False,experiment_number=experiment_number)
-    runlogBtest = RunLog("mnist","small","relu",False,True,experiment_number=experiment_number)
-    runlogCtest = RunLog("mnist","small","relu",True,True,experiment_number=experiment_number)
-
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size,
                                                shuffle=True)
@@ -186,25 +182,22 @@ for run in range(num_runs):
                                      adjust_regions = False,
                                      adjust_variance = False)
     modelDefault = modelDefault.to(device)
-    runlogA.record_cost_vector(-1,-1,c_default)
     c_default_test = reinitialise_network(modelDefault, Xtest, Ytest,
                                           return_cost_vector = True,
                                           adjust_regions = False,
                                           adjust_variance = False)
-    runlogAtest.record_cost_vector(-1,-1,c_default_test)
-
+    runlogA.record_cost_vector(0,0,[c_default,c_default_test])
 
     c_rescale = reinitialise_network(modelRescale, X, Y,
                                      return_cost_vector = True,
                                      adjust_regions = False,
                                      adjust_variance = True)
     modelRescale = modelRescale.to(device)
-    runlogB.record_cost_vector(-1,-1,c_rescale)
     c_rescale_test = reinitialise_network(modelRescale, Xtest, Ytest,
                                           return_cost_vector = True,
                                           adjust_regions = False,
                                           adjust_variance = False)
-    runlogBtest.record_cost_vector(-1,-1,c_rescale_test)
+    runlogB.record_cost_vector(0,0,[c_rescale,c_rescale_test])
 
     print("run ",run+1," of ",num_runs,": reinitialising")
     c_reinit = reinitialise_network(modelReinit, X, Y,
@@ -212,12 +205,11 @@ for run in range(num_runs):
                                     adjust_regions = True,
                                     adjust_variance = True)
     modelReinit = modelReinit.to(device)
-    runlogC.record_cost_vector(-1,-1,c_reinit)
     c_reinit_test = reinitialise_network(modelReinit, Xtest, Ytest,
                                          return_cost_vector = True,
                                          adjust_regions = False,
                                          adjust_variance = False)
-    runlogCtest.record_cost_vector(-1,-1,c_reinit_test)
+    runlogC.record_cost_vector(0,0,[c_reinit,c_reinit_test])
 
     criterion = nn.CrossEntropyLoss()
     optimizerDefault = torch.optim.Adam(modelDefault.parameters())
@@ -246,9 +238,6 @@ for run in range(num_runs):
             lossRescale = criterion(outputsRescale, labels)
             outputsReinit = modelReinit(images)
             lossReinit = criterion(outputsReinit, labels)
-            print(labels[:10])
-            print("---------")
-            print(labelsTest[:10])
 
             outputsDefaultTest = modelDefault(imagesTest)
             lossDefaultTest = criterion(outputsDefaultTest, labelsTest)
@@ -379,7 +368,6 @@ for run in range(num_runs):
                 cost_default = reinitialise_network(modelDefault, X, Y, True, False, False)
                 cost_rescale = reinitialise_network(modelRescale, X, Y, True, False, False)
                 cost_reinit = reinitialise_network(modelReinit, X, Y, True, False, False)
-
                 cost_default_test = reinitialise_network(modelDefault, Xtest, Ytest, True, False, False)
                 cost_rescale_test = reinitialise_network(modelRescale, Xtest, Ytest, True, False, False)
                 cost_reinit_test = reinitialise_network(modelReinit, Xtest, Ytest, True, False, False)
