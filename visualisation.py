@@ -8,7 +8,7 @@ exec(open("log_classes.py").read())
 
 data_log = Log()
 
-experiment_numbers = ["342911688"]
+experiment_numbers = ["46158295"] # 452749413
 
 for number in experiment_numbers:
     print('Experiment number:', number)
@@ -75,12 +75,12 @@ losses_std = epoch_and_step_to_partial_epoch(losses_std)
 losses_var = epoch_and_step_to_partial_epoch(losses_var)
 losses_full = epoch_and_step_to_partial_epoch(losses_full)
 
-accuracies_std = drop_all_accuracies_except_total(accuracies_std)
-accuracies_var = drop_all_accuracies_except_total(accuracies_var)
-accuracies_full = drop_all_accuracies_except_total(accuracies_full)
-accuracies_std = epoch_and_step_to_partial_epoch(accuracies_std)
-accuracies_var = epoch_and_step_to_partial_epoch(accuracies_var)
-accuracies_full = epoch_and_step_to_partial_epoch(accuracies_full)
+accuracy_std = drop_all_accuracies_except_total(accuracies_std)
+accuracy_var = drop_all_accuracies_except_total(accuracies_var)
+accuracy_full = drop_all_accuracies_except_total(accuracies_full)
+accuracy_std = epoch_and_step_to_partial_epoch(accuracy_std)
+accuracy_var = epoch_and_step_to_partial_epoch(accuracy_var)
+accuracy_full = epoch_and_step_to_partial_epoch(accuracy_full)
 
 #%%
 
@@ -97,15 +97,15 @@ def compute_average_across_runs(losses_vector):
             loss_test += losses_vector[run][step][1][1]
         average_across_runs_train.append([losses_vector[0][step][0],loss_train/n_runs])
         average_across_runs_test.append([losses_vector[0][step][0],loss_test/n_runs])
-    return average_across_runs_train,average_across_runs_test
+    return np.array(average_across_runs_train),np.array(average_across_runs_test)
 
 average_loss_train_std, average_loss_test_std = compute_average_across_runs(losses_std)
-average_loss_var = compute_average_across_runs(losses_var)
-average_loss_full = compute_average_across_runs(losses_full)
+average_loss_train_var, average_loss_test_var = compute_average_across_runs(losses_var)
+average_loss_train_full, average_loss_test_full = compute_average_across_runs(losses_full)
 
-average_accuracies_train_std, average_accuracies_test_std = compute_average_across_runs(accuracies_std)
-average_accuracies_train_var, average_accuracies_test_var = compute_average_across_runs(accuracies_var)
-average_accuracies_train_full, average_accuracies_test_full = compute_average_across_runs(accuracies_full)
+average_accuracy_train_std, average_accuracy_test_std = compute_average_across_runs(accuracy_std)
+average_accuracy_train_var, average_accuracy_test_var = compute_average_across_runs(accuracy_var)
+average_accuracy_train_full, average_accuracy_test_full = compute_average_across_runs(accuracy_full)
 
 def compute_average_tcosts_nregions_across_runs(cost_vectors):
 
@@ -122,44 +122,75 @@ def compute_average_tcosts_nregions_across_runs(cost_vectors):
         tcost_test = 0
         nregion_test = 0
         for run in range(n_runs):
-            region_costs = cost_vectors[run][step][2][0] # final entry i = up to layer i
-            for region_cost_entry in region_costs:
-                tcost += region_cost_entry[0]*region_cost_entry[2]
-                nregion += region_cost_entry[2]
+            region_costs_train = cost_vectors[run][step][2][0][-1] # final entry i = up to layer i
+            region_costs_test = cost_vectors[run][step][2][1][-1] # final entry i = up to layer i
+            for region_cost_entry in region_costs_train:
+                tcost_train += region_cost_entry[0]*region_cost_entry[2]
+                nregion_train += region_cost_entry[2]
+            for region_cost_entry in region_costs_test:
+                tcost_test += region_cost_entry[0]*region_cost_entry[2]
+                nregion_test += region_cost_entry[2]
 
-        average_tcosts_across_runs.append(tcost/n_runs)
-        average_nregions_across_runs.append(nregion/n_runs)
+        average_tcosts_train.append(tcost_train/n_runs)
+        average_nregions_train.append(nregion_train/n_runs)
+        average_tcosts_test.append(tcost_test/n_runs)
+        average_nregions_test.append(nregion_test/n_runs)
 
-    return average_tcosts_across_runs, average_nregions_across_runs
+    return np.array(average_tcosts_train), np.array(average_nregions_train), np.array(average_tcosts_test), np.array(average_nregions_test)
 
-average_tcosts_std, average_nregions_std = compute_average_tcosts_nregions_across_runs(cost_vectors_std)
-average_tcosts_var, average_nregions_var = compute_average_tcosts_nregions_across_runs(cost_vectors_var)
-average_tcosts_full, average_nregions_full = compute_average_tcosts_nregions_across_runs(cost_vectors_full)
+average_tcosts_std_train, average_nregions_std_train, average_tcosts_std_test, average_nregions_std_test = compute_average_tcosts_nregions_across_runs(cost_vectors_std)
+average_tcosts_var_train, average_nregions_var_train, average_tcosts_var_test, average_nregions_var_test = compute_average_tcosts_nregions_across_runs(cost_vectors_var)
+average_tcosts_full_train, average_nregions_full_train, average_tcosts_full_test, average_nregions_full_test = compute_average_tcosts_nregions_across_runs(cost_vectors_full)
 
-# # fig, (ax1, ax2, ax3, ax4) = plt.subplots(4)
+fig, subfigures = plt.subplots(4,2,sharex=True,sharey='row')
 
-# # ax1.plot(range(97),average_tcosts_std)
-# # ax1.plot(range(97),average_tcosts_var)
-# # ax1.plot(range(97),average_tcosts_full)
-# # ax1.legend(['std','var','full'])
-# # ax1.set_ylabel('total costs')
+subfigures[0,0].plot(np.linspace(0,0.25,51),average_tcosts_std_train)
+subfigures[0,0].plot(np.linspace(0,0.25,51),average_tcosts_var_train)
+subfigures[0,0].plot(np.linspace(0,0.25,51),average_tcosts_full_train)
+subfigures[0,0].legend(['std','var','full'])
+subfigures[0,0].set_ylabel('total costs (train)')
 
-# # ax2.plot(range(97),average_nregions_std)
-# # ax2.plot(range(97),average_nregions_var)
-# # ax2.plot(range(97),average_nregions_full)
-# # ax2.legend(['std','var','full'])
-# # ax2.set_ylabel('number regions')
+subfigures[1,0].plot(np.linspace(0,0.25,51),average_nregions_std_train)
+subfigures[1,0].plot(np.linspace(0,0.25,51),average_nregions_var_train)
+subfigures[1,0].plot(np.linspace(0,0.25,51),average_nregions_full_train)
+subfigures[1,0].legend(['std','var','full'])
+subfigures[1,0].set_ylabel('number of regions (train)')
 
-# # ax3.plot([i[0] for i in average_loss_std],[i[1] for i in average_loss_std])
-# # ax3.plot([i[0] for i in average_loss_var],[i[1] for i in average_loss_var])
-# # ax3.plot([i[0] for i in average_loss_full],[i[1] for i in average_loss_full])
-# # ax3.legend(['std','var','full'])
-# # ax3.set_ylabel('loss')
+subfigures[2,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_train_std])
+subfigures[2,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_train_var])
+subfigures[2,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_train_full])
+subfigures[2,0].legend(['std','var','full'])
+subfigures[2,0].set_ylabel('loss (train)')
 
-# # ax4.plot([i[0] for i in average_accuracies_std],[i[1] for i in average_accuracies_std])
-# # ax4.plot([i[0] for i in average_accuracies_var],[i[1] for i in average_accuracies_var])
-# # ax4.plot([i[0] for i in average_accuracies_full],[i[1] for i in average_accuracies_full])
-# # ax4.legend(['std','var','full'])
-# # ax4.set_ylabel('accuracy')
+subfigures[3,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_train_std])
+subfigures[3,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_train_var])
+subfigures[3,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_train_full])
+subfigures[3,0].legend(['std','var','full'])
+subfigures[3,0].set_ylabel('accuracy (train)')
 
-# # plt.show()
+
+subfigures[0,1].plot(np.linspace(0,0.25,51),average_tcosts_std_test*3)
+subfigures[0,1].plot(np.linspace(0,0.25,51),average_tcosts_var_test*3)
+subfigures[0,1].plot(np.linspace(0,0.25,51),average_tcosts_full_test*3)
+subfigures[0,1].legend(['std','var','full'])
+subfigures[0,1].set_ylabel('total costs (test)')
+
+subfigures[1,1].plot(np.linspace(0,0.25,51),average_nregions_std_test*3)
+subfigures[1,1].plot(np.linspace(0,0.25,51),average_nregions_var_test*3)
+subfigures[1,1].plot(np.linspace(0,0.25,51),average_nregions_full_test*3)
+subfigures[1,1].legend(['std','var','full'])
+subfigures[1,1].set_ylabel('number of regions (test)')
+
+subfigures[2,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_test_std])
+subfigures[2,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_test_var])
+subfigures[2,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_test_full])
+subfigures[2,1].legend(['std','var','full'])
+subfigures[2,1].set_ylabel('loss (test)')
+
+subfigures[3,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_test_std])
+subfigures[3,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_test_var])
+subfigures[3,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_test_full])
+subfigures[3,1].legend(['std','var','full'])
+subfigures[3,1].set_ylabel('accuracy (test)')
+
+plt.show()
