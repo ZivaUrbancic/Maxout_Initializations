@@ -18,8 +18,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 1
-num_epochs = 2
+num_runs = 12
+num_epochs = 24
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
@@ -163,9 +163,9 @@ modelDefault = ReLUNet().to(device)
 FileLog = Log()
 
 for run in range(num_runs):
-    runlogA = RunLog("mnist","small","relu",False,False,experiment_number=experiment_number)
-    runlogB = RunLog("mnist","small","relu",False,True,experiment_number=experiment_number)
-    runlogC = RunLog("mnist","small","relu",True,True,experiment_number=experiment_number)
+    runlogA = RunLog("mnist",network_size,"relu",False,False,experiment_number=experiment_number)
+    runlogB = RunLog("mnist",network_size,"relu",False,True,experiment_number=experiment_number)
+    runlogC = RunLog("mnist",network_size,"relu",True,True,experiment_number=experiment_number)
 
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size,
@@ -380,3 +380,4 @@ for run in range(num_runs):
     FileLog.add_runlog(runlogC)
 
 FileLog.save(experiment_number)
+print("Experiment number: ", experiment_number)
