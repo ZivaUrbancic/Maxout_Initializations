@@ -814,7 +814,7 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, return_cost_vecto
             if c == -1:
                 stage = 0
             if c == 0:
-                stage = 2
+                stage = 2 
 
 
     # step 1: reintialise parameters
@@ -838,7 +838,10 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, return_cost_vecto
             if adjust_regions and k_cost > 0:
                 stage = 1
             if k_cost == 0:
-                stage = 2
+                if return_cost_vector:
+                    stage = 0
+                else:
+                    stage = 2
 
         # stage 1:
         #   use special reinitialisation routines until all regions have cost 0
