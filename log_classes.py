@@ -79,8 +79,8 @@ class Log:
                     current = self.dict[dataset][size][rank]
                     updates = log.dict[dataset][size][rank]
                     if len(updates) > 0:
-                        print('Appending', len(updates)//3 , 
-                              'runs of each initialisation routine for:', 
+                        print('Appending', len(updates)//3 ,
+                              'runs of each initialisation routine for:',
                               dataset, size, rank)
                     for update in updates:
                         # print(update)
