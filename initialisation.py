@@ -611,7 +611,7 @@ def k_th_largest_region_cost(C,k):
 #             return y1
 #         y = y1
 
-def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
+def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = True, adjust_variance = True, verbose = False):
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
@@ -620,8 +620,12 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
     for l, child in enumerate(model.children()):
 
         if type(child)==torch.nn.modules.conv.Conv1d or type(child)==torch.nn.modules.conv.Conv2d:
-            if adjust_regions or adjust_variance:
-                print("Reinitialising layer", l,"of type Conv1d or Conv2d")
+            if verbose and adjust_regions:
+                print("Reinitialising child", l,"of type", type(child))
+            elif verbose and adjust_variance:
+                print("Adjusting child", l,"of type", type(child))
+            elif verbose:
+                print("Passing child", l,"of type", type(child))
             X, R, C = reinitialise_conv_layer(child, X, Y, R, C,
                                               # return_cost_vector = return_cost_vector, # todo? no!
                                               adjust_regions = adjust_regions,
@@ -630,8 +634,12 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
         else:
             if type(child)==torch.nn.modules.linear.Linear:
                 # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
-                if adjust_regions or adjust_variance:
-                    print("Reinitialising layer", l,"of type ReLU")
+                if verbose and adjust_regions:
+                    print("Reinitialising child", l,"of type", type(child))
+                elif verbose and adjust_variance:
+                    print("Adjusting child", l,"of type", type(child))
+                elif verbose:
+                    print("Passing child", l,"of type", type(child))
                 if len(X.shape)>2:
                     X = np.array([x.flatten() for x in X])
                 X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
@@ -641,8 +649,12 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                 compressedCostVectors.append(compress_region_cost_vector(C))
             elif type(child)==torch.nn.modules.container.ModuleList:
                 # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
-                if adjust_regions or adjust_variance:
-                    print("Reinitialising layer", l,"of type Maxout")
+                if verbose and adjust_regions:
+                    print("Reinitialising child", l,"of type", type(child))
+                elif verbose and adjust_variance:
+                    print("Adjusting child", l,"of type", type(child))
+                elif verbose:
+                    print("Passing child", l,"of type", type(child))
                 if len(X.shape)>2:
                     X = np.array([x.flatten() for x in X])
                 X, R, C = reinitialise_maxout_layer(child, X, Y, R, C,
@@ -651,8 +663,8 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                                                     adjust_variance = adjust_variance)
                 compressedCostVectors.append(compress_region_cost_vector(C))
             else:
-                if adjust_regions or adjust_variance:
-                    print("Applying child of type", type(child), "without reinitialising")
+                if verbose:
+                    print("Passing child", l,"of type", type(child))
                 X = child(torch.tensor(X)).detach().numpy()
                 # todo: check if layer supported, print warning if not
 
@@ -777,11 +789,10 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
     return X, R, C
 
 
-def reinitialise_relu_layer(child, X, Y, R = False, C = False, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
+def reinitialise_relu_layer(child, X, Y, R = [], C = [], return_cost_vector = False, adjust_regions = True, adjust_variance = True):
 
-    if type(R) == bool or type(C) == bool:
+    if len(R) == 0 or len(C) == 0:
         N = X.shape[0] # number of data points
-        assert R == False and C == False
         R = initialise_region_matrix(N)
         C = initialise_costs_vector(N)
 
@@ -814,7 +825,7 @@ def reinitialise_relu_layer(child, X, Y, R = False, C = False, return_cost_vecto
             if c == -1:
                 stage = 0
             if c == 0:
-                stage = 2 
+                stage = 2
 
 
     # step 1: reintialise parameters

@@ -8,7 +8,6 @@ import torchvision.transforms as transforms
 import numpy as np
 import random
 from log_classes import *
-exec(open("mnist.py").read())
 exec(open("initialisation.py").read())
 np.set_printoptions(threshold=np.inf)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,8 +17,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Experiment hyperparameters
 ###
 experiment_number = random.randint(0,999999999)
-num_runs = 12
-num_epochs = 24
+num_runs = 3
+num_epochs = 2
 batch_size = 100
 learning_rate = 0.001
 dataset = "MNIST"
@@ -115,51 +114,44 @@ class ReLUNet(nn.Module):
     def __init__(self):
         super(ReLUNet, self).__init__()
         self.layer1 = nn.Linear(n0, n1)
+        self.act1 = activation
         self.layer2 = nn.Linear(n1, n2)
+        self.act2 = activation
         self.layer3 = nn.Linear(n2, n3)
-
-    def forward(self, x):
-        x = x.view(x.size(0), -1)
-        x = activation(self.layer1(x))
-        x = activation(self.layer2(x))
-        x = output_normalisation(self.layer3(x))
-        return x
-
-class ReLUBatchNormNet(nn.Module):
-    def __init__(self):
-        super(ReLUBatchNormNet, self).__init__()
-        self.layer1 = nn.Linear(n0, n1)
-        self.layer2 = nn.Linear(n1, n2)
-        self.layer3 = nn.Linear(n2, n3)
-        self.bn1 = nn.BatchNorm1d(n1)
-        self.bn2 = nn.BatchNorm1d(n2)
-
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
         x = self.layer1(x)
-        x = activation(self.bn1(x))
+        x = self.act1(x)
         x = self.layer2(x)
-        x = activation(self.bn2(x))
-        x = output_normalisation(self.layer3(x))
-        return x
+        x = self.act2(x)
+        x = self.layer3(x)
+        return output_normalisation(x)
+
+# class ReLUBatchNormNet(nn.Module):
+#     def __init__(self):
+#         super(ReLUBatchNormNet, self).__init__()
+#         self.layer1 = nn.Linear(n0, n1)
+#         self.layer2 = nn.Linear(n1, n2)
+#         self.layer3 = nn.Linear(n2, n3)
+#         self.bn1 = nn.BatchNorm1d(n1)
+#         self.bn2 = nn.BatchNorm1d(n2)
+
+
+#     def forward(self, x):
+#         x = x.view(x.size(0), -1)
+#         x = self.layer1(x)
+#         x = activation(self.bn1(x))
+#         x = self.layer2(x)
+#         x = activation(self.bn2(x))
+#         x = output_normalisation(self.layer3(x))
+#         return x
 
 
 
 ###
 # Running experiments
 ###
-modelDefault = ReLUNet().to(device)
-# print("activation: relu\n",
-#       "rank: N/A\n",
-#       "hidden layers: 2\n",
-#       "widths:",n0,n1,n2,n3,"\n",
-#       "dataset:",dataset,"\n",
-#       "data_sample_size:",data_sample_size,"\n",
-#       "num_runs:",num_runs,"\n",
-#       "num_epochs",num_epochs,"\n",
-#       file=open(str(experiment_number)+".log",'+a'))
-
 FileLog = Log()
 
 for run in range(num_runs):
