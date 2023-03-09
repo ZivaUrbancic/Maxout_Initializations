@@ -8,7 +8,11 @@ exec(open("log_classes.py").read())
 
 data_log = Log()
 
-experiment_numbers = ["46158295"] # 452749413
+experiment_numbers = ["875639784"]
+
+epoch_start = 0
+epoch_end = 2 # can be float
+
 
 for number in experiment_numbers:
     print('Experiment number:', number)
@@ -142,54 +146,54 @@ average_tcosts_std_train, average_nregions_std_train, average_tcosts_std_test, a
 average_tcosts_var_train, average_nregions_var_train, average_tcosts_var_test, average_nregions_var_test = compute_average_tcosts_nregions_across_runs(cost_vectors_var)
 average_tcosts_full_train, average_nregions_full_train, average_tcosts_full_test, average_nregions_full_test = compute_average_tcosts_nregions_across_runs(cost_vectors_full)
 
-fig, subfigures = plt.subplots(4,2,sharex=True,sharey='row')
+fig, subfigures = plt.subplots(4,2,sharex=True)#,sharey='row')
 
-subfigures[0,0].plot(np.linspace(0,0.25,51),average_tcosts_std_train)
-subfigures[0,0].plot(np.linspace(0,0.25,51),average_tcosts_var_train)
-subfigures[0,0].plot(np.linspace(0,0.25,51),average_tcosts_full_train)
+subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_std_train)),average_tcosts_std_train)
+subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_var_train)),average_tcosts_var_train)
+subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_full_train)),average_tcosts_full_train)
 subfigures[0,0].legend(['std','var','full'])
 subfigures[0,0].set_ylabel('total costs (train)')
 
-subfigures[1,0].plot(np.linspace(0,0.25,51),average_nregions_std_train)
-subfigures[1,0].plot(np.linspace(0,0.25,51),average_nregions_var_train)
-subfigures[1,0].plot(np.linspace(0,0.25,51),average_nregions_full_train)
+subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_std_train)),average_nregions_std_train)
+subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_var_train)),average_nregions_var_train)
+subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_full_train)),average_nregions_full_train)
 subfigures[1,0].legend(['std','var','full'])
 subfigures[1,0].set_ylabel('number of regions (train)')
 
-subfigures[2,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_train_std])
-subfigures[2,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_train_var])
-subfigures[2,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_train_full])
+subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_std)),[x[1] for x in average_loss_train_std])
+subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_var)),[x[1] for x in average_loss_train_var])
+subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_full)),[x[1] for x in average_loss_train_full])
 subfigures[2,0].legend(['std','var','full'])
 subfigures[2,0].set_ylabel('loss (train)')
 
-subfigures[3,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_train_std])
-subfigures[3,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_train_var])
-subfigures[3,0].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_train_full])
+subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_std)),[x[1] for x in average_accuracy_train_std])
+subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_var)),[x[1] for x in average_accuracy_train_var])
+subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_full)),[x[1] for x in average_accuracy_train_full])
 subfigures[3,0].legend(['std','var','full'])
 subfigures[3,0].set_ylabel('accuracy (train)')
 
 
-subfigures[0,1].plot(np.linspace(0,0.25,51),average_tcosts_std_test*3)
-subfigures[0,1].plot(np.linspace(0,0.25,51),average_tcosts_var_test*3)
-subfigures[0,1].plot(np.linspace(0,0.25,51),average_tcosts_full_test*3)
+subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_std_test)),average_tcosts_std_test)
+subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_var_test)),average_tcosts_var_test)
+subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_full_test)),average_tcosts_full_test)
 subfigures[0,1].legend(['std','var','full'])
 subfigures[0,1].set_ylabel('total costs (test)')
 
-subfigures[1,1].plot(np.linspace(0,0.25,51),average_nregions_std_test*3)
-subfigures[1,1].plot(np.linspace(0,0.25,51),average_nregions_var_test*3)
-subfigures[1,1].plot(np.linspace(0,0.25,51),average_nregions_full_test*3)
+subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_std_test)),average_nregions_std_test)
+subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_var_test)),average_nregions_var_test)
+subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_full_test)),average_nregions_full_test)
 subfigures[1,1].legend(['std','var','full'])
 subfigures[1,1].set_ylabel('number of regions (test)')
 
-subfigures[2,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_test_std])
-subfigures[2,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_test_var])
-subfigures[2,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_loss_test_full])
+subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_std)),[x[1] for x in average_loss_test_std])
+subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_var)),[x[1] for x in average_loss_test_var])
+subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_full)),[x[1] for x in average_loss_test_full])
 subfigures[2,1].legend(['std','var','full'])
 subfigures[2,1].set_ylabel('loss (test)')
 
-subfigures[3,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_test_std])
-subfigures[3,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_test_var])
-subfigures[3,1].plot(np.linspace(0,0.25,51)[1:],[x[1] for x in average_accuracy_test_full])
+subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_std)),[x[1] for x in average_accuracy_test_std])
+subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_var)),[x[1] for x in average_accuracy_test_var])
+subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_full)),[x[1] for x in average_accuracy_test_full])
 subfigures[3,1].legend(['std','var','full'])
 subfigures[3,1].set_ylabel('accuracy (test)')
 
