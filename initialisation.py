@@ -478,7 +478,7 @@ def compute_splits(projections, number_of_regions = 2):
 #     biases = np.multiply(scale_factor, biases)
 #     return weights, biases
 
-def fix_child_variance(child, X):
+def fix_child_variance(child, X, iso=False):
     '''
     Rescale the weights and biases of a layer 'child' to normalise the
     image X of the data. If the layer is linear we rescale componentwise, and so will take the
@@ -516,17 +516,25 @@ def fix_child_variance(child, X):
         conv = 0
         ax = 0
 
-    # Rescale weights and biases according to the type of layer.
-    std_scale = torch.tensor(np.std(X, axis = ax))
-    std_scale[std_scale == 0] = 1
-    with torch.no_grad():
-        if conv == 2:
-            child.weight /= std_scale.reshape(-1, 1, 1, 1)
-        elif conv == 1:
-            child.weight /= std_scale.reshape(-1, 1, 1)
-        else:
-            child.weight /= std_scale.reshape(-1, 1)
-        child.bias /= std_scale
+    if iso:
+        assert conv == 0
+        # Rescale weights and biases according to the type of layer.
+        std_scale = np.std(np.linalg.norm(X, axis=1))
+        with torch.no_grad():
+            child.weight /= std_scale
+            child.bias /= std_scale
+    else:
+        # Rescale weights and biases according to the type of layer.
+        std_scale = torch.tensor(np.std(X, axis = ax))
+        std_scale[std_scale == 0] = 1
+        with torch.no_grad():
+            if conv == 2:
+                child.weight /= std_scale.reshape(-1, 1, 1, 1)
+            elif conv == 1:
+                child.weight /= std_scale.reshape(-1, 1, 1)
+            else:
+                child.weight /= std_scale.reshape(-1, 1)
+                child.bias /= std_scale
 
 def k_th_largest_region_cost(C,k):
     '''
@@ -611,7 +619,7 @@ def k_th_largest_region_cost(C,k):
 #             return y1
 #         y = y1
 
-def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = True, adjust_variance = True, verbose = False):
+def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = True, adjust_variance = True, verbose = False, iso = False):
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
@@ -643,9 +651,10 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                 if len(X.shape)>2:
                     X = np.array([x.flatten() for x in X])
                 X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
-                                              return_cost_vector = return_cost_vector,
-                                              adjust_regions = adjust_regions,
-                                              adjust_variance = adjust_variance)
+                                                  return_cost_vector = return_cost_vector,
+                                                  adjust_regions = adjust_regions,
+                                                  adjust_variance = adjust_variance,
+                                                  iso = iso)
                 compressedCostVectors.append(compress_region_cost_vector(C))
             elif type(child)==torch.nn.modules.container.ModuleList:
                 # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
@@ -660,7 +669,8 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
                 X, R, C = reinitialise_maxout_layer(child, X, Y, R, C,
                                                     return_cost_vector = return_cost_vector,
                                                     adjust_regions = adjust_regions,
-                                                    adjust_variance = adjust_variance)
+                                                    adjust_variance = adjust_variance,
+                                                    iso = iso)
                 compressedCostVectors.append(compress_region_cost_vector(C))
             else:
                 if verbose:
@@ -670,7 +680,7 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
 
     return compressedCostVectors
 
-def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_vector = False, adjust_regions = True, adjust_variance = True):
+def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_vector = False, adjust_regions = True, adjust_variance = True, iso = False):
 
     if type(R) == bool or type(C) == bool:
         N = X.shape[0] # number of data points
@@ -779,7 +789,7 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
 
         # adjust weights and biases to control the variance:
         for child in children:
-            fix_child_variance(child, Xtemp)
+            fix_child_variance(child, Xtemp, iso)
 
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
@@ -789,7 +799,7 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
     return X, R, C
 
 
-def reinitialise_relu_layer(child, X, Y, R = [], C = [], return_cost_vector = False, adjust_regions = True, adjust_variance = True):
+def reinitialise_relu_layer(child, X, Y, R = [], C = [], return_cost_vector = False, adjust_regions = True, adjust_variance = True, iso = False):
 
     if len(R) == 0 or len(C) == 0:
         N = X.shape[0] # number of data points
@@ -891,7 +901,7 @@ def reinitialise_relu_layer(child, X, Y, R = [], C = [], return_cost_vector = Fa
             Xtemp = nn.ReLU()(child(torch.tensor(X))).numpy()
 
         # adjust weights and biases to control the variance:
-        fix_child_variance(child, Xtemp)
+        fix_child_variance(child, Xtemp, iso)
 
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
