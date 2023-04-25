@@ -215,7 +215,7 @@ def cdf_cardinality(cost_vector):
     # find unique cardinalities
     _,indices = np.unique(cardinality_array[::-1,0],return_index=True)
     cardinality_array = cardinality_array[-1-indices]
-    return np.concatenate((np.array([[0,0]]),cardinality_array))
+    return cardinality_array
 
 
 def cdf_cost(cost_vector):
@@ -233,11 +233,29 @@ def cdf_cost(cost_vector):
     # find unique cost
     _,indices = np.unique(cost_array[::-1,0],return_index=True)
     cost_array = cost_array[-1-indices]
-    return np.concatenate((np.array([[0,0]]),cost_array))
+
+    # prepend (0,0) if first entry has non-zero cost
+    if cost_array[0][0] > 0:
+        cost_array = np.concatenate((np.array([[0,0]]),cost_array))
+
+    return cost_array
 
 
 cost_vector = cost_vectors_std[0][0][2][0][-1]
 
-cdfCost = cdf_cost(cost_vector)
-plt.plot(cdfCost[:,0],cdfCost[:,1])
+# cdfCost = cdf_cost(cost_vector)
+# plt.plot(cdfCost[:,0],cdfCost[:,1])
+# plt.show()
+
+cdfCard = cdf_cardinality(cost_vector)
+plt.plot(cdfCard[1:,0],cdfCard[1:,1])
 plt.show()
+
+
+cost_vector = cost_vectors_full[0][0][2][0][-1]
+cdfCard = cdf_cardinality(cost_vector)
+plt.plot(cdfCard[1:,0],cdfCard[1:,1])
+plt.show()
+
+# ML estimator for pareto parameter alpha:
+cdfCard[-1,1]/np.sum(np.log(cdfCard[:,0]/cdfCard[0,0])*cdfCard[:,1])
