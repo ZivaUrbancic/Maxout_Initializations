@@ -8,7 +8,8 @@ exec(open("log_classes.py").read())
 
 data_log = Log()
 
-experiment_numbers = ["703906216"]#,"565539096"]
+#experiment_numbers = ["703906216"]#,"565539096"]
+experiment_numbers = ["849254833"]#,"428942063"]
 
 epoch_start = 0
 epoch_end = 24 # can be float
@@ -88,19 +89,19 @@ accuracy_full = epoch_and_step_to_partial_epoch(accuracy_full)
 
 #%%
 
-def compute_average_across_runs(losses_vector):
+def compute_average_across_runs(cost_vector):
     average_across_runs_train = []
     average_across_runs_test = []
-    n_runs = len(losses_vector)
-    n_steps = len(losses_vector[0])
+    n_runs = len(cost_vector)
+    n_steps = len(cost_vector[0])
     for step in range(n_steps):
         loss_train = 0
         loss_test = 0
         for run in range(n_runs):
-            loss_train += losses_vector[run][step][1][0]
-            loss_test += losses_vector[run][step][1][1]
-        average_across_runs_train.append([losses_vector[0][step][0],loss_train/n_runs])
-        average_across_runs_test.append([losses_vector[0][step][0],loss_test/n_runs])
+            loss_train += cost_vector[run][step][1][0]
+            loss_test += cost_vector[run][step][1][1]
+        average_across_runs_train.append([cost_vector[0][step][0],loss_train/n_runs])
+        average_across_runs_test.append([cost_vector[0][step][0],loss_test/n_runs])
     return np.array(average_across_runs_train),np.array(average_across_runs_test)
 
 average_loss_train_std, average_loss_test_std = compute_average_across_runs(losses_std)
@@ -142,64 +143,6 @@ def compute_average_tcosts_nregions_across_runs(cost_vectors):
 
     return np.array(average_tcosts_train), np.array(average_nregions_train), np.array(average_tcosts_test), np.array(average_nregions_test)
 
-# average_tcosts_std_train, average_nregions_std_train, average_tcosts_std_test, average_nregions_std_test = compute_average_tcosts_nregions_across_runs(cost_vectors_std)
-# average_tcosts_var_train, average_nregions_var_train, average_tcosts_var_test, average_nregions_var_test = compute_average_tcosts_nregions_across_runs(cost_vectors_var)
-# average_tcosts_full_train, average_nregions_full_train, average_tcosts_full_test, average_nregions_full_test = compute_average_tcosts_nregions_across_runs(cost_vectors_full)
-
-# fig, subfigures = plt.subplots(4,2,sharex=True)#,sharey='row')
-
-# subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_std_train)),average_tcosts_std_train)
-# subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_var_train)),average_tcosts_var_train)
-# subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_full_train)),average_tcosts_full_train)
-# subfigures[0,0].legend(['std','var','full'])
-# subfigures[0,0].set_ylabel('total costs (train)')
-
-# subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_std_train)),average_nregions_std_train)
-# subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_var_train)),average_nregions_var_train)
-# subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_full_train)),average_nregions_full_train)
-# subfigures[1,0].legend(['std','var','full'])
-# subfigures[1,0].set_ylabel('number of regions (train)')
-
-# subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_std)),[x[1] for x in average_loss_train_std])
-# subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_var)),[x[1] for x in average_loss_train_var])
-# subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_full)),[x[1] for x in average_loss_train_full])
-# subfigures[2,0].legend(['std','var','full'])
-# subfigures[2,0].set_ylabel('loss (train)')
-
-# subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_std)),[x[1] for x in average_accuracy_train_std])
-# subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_var)),[x[1] for x in average_accuracy_train_var])
-# subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_full)),[x[1] for x in average_accuracy_train_full])
-# subfigures[3,0].legend(['std','var','full'])
-# subfigures[3,0].set_ylabel('accuracy (train)')
-
-
-# subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_std_test)),average_tcosts_std_test)
-# subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_var_test)),average_tcosts_var_test)
-# subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_full_test)),average_tcosts_full_test)
-# subfigures[0,1].legend(['std','var','full'])
-# subfigures[0,1].set_ylabel('total costs (test)')
-
-# subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_std_test)),average_nregions_std_test)
-# subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_var_test)),average_nregions_var_test)
-# subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_full_test)),average_nregions_full_test)
-# subfigures[1,1].legend(['std','var','full'])
-# subfigures[1,1].set_ylabel('number of regions (test)')
-
-# subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_std)),[x[1] for x in average_loss_test_std])
-# subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_var)),[x[1] for x in average_loss_test_var])
-# subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_full)),[x[1] for x in average_loss_test_full])
-# subfigures[2,1].legend(['std','var','full'])
-# subfigures[2,1].set_ylabel('loss (test)')
-
-# subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_std)),[x[1] for x in average_accuracy_test_std])
-# subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_var)),[x[1] for x in average_accuracy_test_var])
-# subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_full)),[x[1] for x in average_accuracy_test_full])
-# subfigures[3,1].legend(['std','var','full'])
-# subfigures[3,1].set_ylabel('accuracy (test)')
-
-# # plt.show()
-
-
 def cdf_cardinality(cost_vector):
 
     # change third column from number of regions
@@ -240,22 +183,123 @@ def cdf_cost(cost_vector):
 
     return cost_array
 
+def pareto_card(cost_vector):
+    cdfCard = cdf_cardinality(cost_vector)
+    return cdfCard[-1,1]/np.sum(np.log(cdfCard[:,0]/cdfCard[0,0])*cdfCard[:,1])
 
-cost_vector = cost_vectors_std[0][0][2][0][-1]
+def compute_pareto_across_runs(cost_vector):
+    pareto_across_runs_train = []
+    pareto_across_runs_test = []
+    n_runs = len(cost_vector)
+    n_steps = len(cost_vector[0])
+    for step in range(n_steps):
+        pareto_train = 0
+        pareto_test = 0
+        for run in range(n_runs):
+            vector_train = cost_vector[run][step][1][0][-1]
+            vector_test = cost_vector[run][step][1][1][-1]
+            pareto_train += pareto_card(vector_train)
+            pareto_test += pareto_card(vector_test)
+        pareto_across_runs_train.append([cost_vector[0][step][0],pareto_train/n_runs])
+        pareto_across_runs_test.append([cost_vector[0][step][0],pareto_test/n_runs])
+    return np.array(pareto_across_runs_train),np.array(pareto_across_runs_test)
 
-# cdfCost = cdf_cost(cost_vector)
-# plt.plot(cdfCost[:,0],cdfCost[:,1])
+costs_std = epoch_and_step_to_partial_epoch(cost_vectors_std)
+costs_var = epoch_and_step_to_partial_epoch(cost_vectors_var)
+costs_full = epoch_and_step_to_partial_epoch(cost_vectors_full)
+
+
+
+# cost_vector = cost_vectors_std[0][0][2][0][-1]
+
+# # cdfCost = cdf_cost(cost_vector)
+# # plt.plot(cdfCost[:,0],cdfCost[:,1])
+# # plt.show()
+
+# cdfCard = cdf_cardinality(cost_vector)
+# plt.plot(cdfCard[1:,0],cdfCard[1:,1])
 # plt.show()
 
-cdfCard = cdf_cardinality(cost_vector)
-plt.plot(cdfCard[1:,0],cdfCard[1:,1])
-plt.show()
+# cost_vector = cost_vectors_full[0][0][2][0][-1]
+# cdfCard = cdf_cardinality(cost_vector)
+# plt.plot(cdfCard[1:,0],cdfCard[1:,1])
+# plt.show()
+
+# # ML estimator for pareto parameter alpha:
+# cdfCard[-1,1]/np.sum(np.log(cdfCard[:,0]/cdfCard[0,0])*cdfCard[:,1])
+
+#-------------------------------------- PLOTTING CODE ---------------------------------------
+
+average_tcosts_std_train, average_nregions_std_train, average_tcosts_std_test, average_nregions_std_test = compute_average_tcosts_nregions_across_runs(cost_vectors_std)
+average_tcosts_var_train, average_nregions_var_train, average_tcosts_var_test, average_nregions_var_test = compute_average_tcosts_nregions_across_runs(cost_vectors_var)
+average_tcosts_full_train, average_nregions_full_train, average_tcosts_full_test, average_nregions_full_test = compute_average_tcosts_nregions_across_runs(cost_vectors_full)
+
+pareto_train_std, pareto_test_std = compute_pareto_across_runs(costs_std)
+pareto_train_var, pareto_test_var = compute_pareto_across_runs(costs_var)
+pareto_train_full, pareto_test_full = compute_pareto_across_runs(costs_full)
+
+fig, subfigures = plt.subplots(5,2,sharex=True, figsize =(20,20))#,sharey='row')
+
+subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_std_train)),average_tcosts_std_train)
+subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_var_train)),average_tcosts_var_train)
+subfigures[0,0].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_full_train)),average_tcosts_full_train)
+subfigures[0,0].legend(['std','var','full'])
+subfigures[0,0].set_ylabel('total costs (train)')
+
+subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_std_train)),average_nregions_std_train)
+subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_var_train)),average_nregions_var_train)
+subfigures[1,0].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_full_train)),average_nregions_full_train)
+subfigures[1,0].legend(['std','var','full'])
+subfigures[1,0].set_ylabel('number of regions (train)')
+
+subfigures[4,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_std)),[x[1] for x in average_loss_train_std])
+subfigures[4,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_var)),[x[1] for x in average_loss_train_var])
+subfigures[4,0].plot(np.linspace(epoch_start,epoch_end,len(average_loss_train_full)),[x[1] for x in average_loss_train_full])
+subfigures[4,0].legend(['std','var','full'])
+subfigures[4,0].set_ylabel('loss (train)')
+
+subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_std)),[x[1] for x in average_accuracy_train_std])
+subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_var)),[x[1] for x in average_accuracy_train_var])
+subfigures[3,0].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_train_full)),[x[1] for x in average_accuracy_train_full])
+subfigures[3,0].legend(['std','var','full'])
+subfigures[3,0].set_ylabel('accuracy (train)')
+
+subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(pareto_train_std)),[x[1] for x in pareto_train_std])
+subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(pareto_train_var)),[x[1] for x in pareto_train_var])
+subfigures[2,0].plot(np.linspace(epoch_start,epoch_end,len(pareto_train_full)),[x[1] for x in pareto_train_full])
+subfigures[2,0].legend(['std','var','full'])
+subfigures[2,0].set_ylabel('pareto (train)')
 
 
-cost_vector = cost_vectors_full[0][0][2][0][-1]
-cdfCard = cdf_cardinality(cost_vector)
-plt.plot(cdfCard[1:,0],cdfCard[1:,1])
-plt.show()
+subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_std_test)),average_tcosts_std_test)
+subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_var_test)),average_tcosts_var_test)
+subfigures[0,1].plot(np.linspace(epoch_start,epoch_end,len(average_tcosts_full_test)),average_tcosts_full_test)
+subfigures[0,1].legend(['std','var','full'])
+subfigures[0,1].set_ylabel('total costs (test)')
 
-# ML estimator for pareto parameter alpha:
-cdfCard[-1,1]/np.sum(np.log(cdfCard[:,0]/cdfCard[0,0])*cdfCard[:,1])
+subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_std_test)),average_nregions_std_test)
+subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_var_test)),average_nregions_var_test)
+subfigures[1,1].plot(np.linspace(epoch_start,epoch_end,len(average_nregions_full_test)),average_nregions_full_test)
+subfigures[1,1].legend(['std','var','full'])
+subfigures[1,1].set_ylabel('number of regions (test)')
+
+subfigures[4,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_std)),[x[1] for x in average_loss_test_std])
+subfigures[4,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_var)),[x[1] for x in average_loss_test_var])
+subfigures[4,1].plot(np.linspace(epoch_start,epoch_end,len(average_loss_test_full)),[x[1] for x in average_loss_test_full])
+subfigures[4,1].legend(['std','var','full'])
+subfigures[4,1].set_ylabel('loss (test)')
+
+
+subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_std)),[x[1] for x in average_accuracy_test_std])
+subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_var)),[x[1] for x in average_accuracy_test_var])
+subfigures[3,1].plot(np.linspace(epoch_start,epoch_end,len(average_accuracy_test_full)),[x[1] for x in average_accuracy_test_full])
+subfigures[3,1].legend(['std','var','full'])
+subfigures[3,1].set_ylabel('accuracy (test)')
+
+subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(pareto_test_std)),[x[1] for x in pareto_test_std])
+subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(pareto_test_var)),[x[1] for x in pareto_test_var])
+subfigures[2,1].plot(np.linspace(epoch_start,epoch_end,len(pareto_test_full)),[x[1] for x in pareto_test_full])
+subfigures[2,1].legend(['std','var','full'])
+subfigures[2,1].set_ylabel('pareto (test)')
+
+plt.savefig('adam_pareto.png')
