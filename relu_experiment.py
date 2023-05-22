@@ -25,6 +25,14 @@ dataset = "MNIST"
 network_size = "small" # "small" or "large"
 
 
+###
+# Deepcopy hack
+###
+def deepcopy_network(model):
+    torch.save(model,'hunter2.pt')
+    return torch.load('hunter2.pt')
+
+
 
 # TODO: make sure the following numbers make sense
 # small size = largest network size where default initialisation leads to bad accuracy
@@ -153,7 +161,7 @@ class ReLUNet(nn.Module):
 # Running experiments
 ###
 FileLog = Log()
-
+ModelList = []
 for run in range(num_runs):
     runlogA = RunLog("mnist",network_size,"relu",False,False,experiment_number=experiment_number)
     runlogB = RunLog("mnist",network_size,"relu",False,True,experiment_number=experiment_number)
@@ -218,6 +226,10 @@ for run in range(num_runs):
 
     imagesTest = imagesTest.to(device)
     labelsTest = labelsTest.to(device)
+
+    modelListInit = [deepcopy_network(modelDefault),
+                     deepcopy_network(modelRescale),
+                     deepcopy_network(modelReinit)]
 
     for epoch in range(num_epochs):
         for i, (images, labels) in enumerate(train_loader):
@@ -367,9 +379,18 @@ for run in range(num_runs):
                 runlogB.record_cost_vector(epoch,i+1,[cost_rescale,cost_rescale_test])
                 runlogC.record_cost_vector(epoch,i+1,[cost_reinit,cost_reinit_test])
 
+    modelListTrained = [deepcopy_network(modelDefault),
+                        deepcopy_network(modelRescale),
+                        deepcopy_network(modelReinit)]
+
     FileLog.add_runlog(runlogA)
     FileLog.add_runlog(runlogB)
     FileLog.add_runlog(runlogC)
 
+    modelList.append([[modelListInit[0],modelListTrained[0]],
+                      [modelListInit[1],modelListTrained[1]],
+                      [modelListInit[2],modelListTrained[2]]])
+
 FileLog.save(experiment_number)
+torch.save(modelList,str(experiment_number)+'.pt')
 print("Experiment number: ", experiment_number)
