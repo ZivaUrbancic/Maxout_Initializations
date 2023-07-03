@@ -478,7 +478,7 @@ def compute_splits(projections, number_of_regions = 2):
 #     biases = np.multiply(scale_factor, biases)
 #     return weights, biases
 
-def fix_child_variance(child, X, iso=False):
+def fix_child_deviation(child, X, target_deviation):
     '''
     Rescale the weights and biases of a layer 'child' to normalise the
     image X of the data. If the layer is linear we rescale componentwise, and so will take the
@@ -516,25 +516,19 @@ def fix_child_variance(child, X, iso=False):
         conv = 0
         ax = 0
 
-    if iso:
-        assert conv == 0
-        # Rescale weights and biases according to the type of layer.
-        std_scale = np.std(np.linalg.norm(X, axis=1))
-        with torch.no_grad():
-            child.weight /= std_scale
+    # Rescale weights and biases according to the type of layer.
+    std_scale = torch.tensor(np.std(X, axis = ax))
+    std_scale[std_scale == 0] = 1
+    with torch.no_grad():
+        if conv == 2:
+            child.weight /= std_scale.reshape(-1, 1, 1, 1)
+        elif conv == 1:
+            child.weight /= std_scale.reshape(-1, 1, 1)
+        else:
+            target_deviation[target_deviation == 0] = 1
+            std_scale  /= target_deviation
+            child.weight /= std_scale.reshape(-1, 1)
             child.bias /= std_scale
-    else:
-        # Rescale weights and biases according to the type of layer.
-        std_scale = torch.tensor(np.std(X, axis = ax))
-        std_scale[std_scale == 0] = 1
-        with torch.no_grad():
-            if conv == 2:
-                child.weight /= std_scale.reshape(-1, 1, 1, 1)
-            elif conv == 1:
-                child.weight /= std_scale.reshape(-1, 1, 1)
-            else:
-                child.weight /= std_scale.reshape(-1, 1)
-                child.bias /= std_scale
 
 def k_th_largest_region_cost(C,k):
     '''
@@ -564,66 +558,42 @@ def k_th_largest_region_cost(C,k):
     return C1[k]
 
 
-# def marginal_median(Y):
-#     '''
-#     Find the marginal median of a data set Y.
 
-#     Parameters
-#     ----------
-#     Y : List or Array
-#         Data set in R^n.
+def layerwise_deviation(model, X):
 
-#     Returns
-#     -------
-#     Array
-#         Component-wise median point in R^n.
+    X = torch.tensor(X)
+    children = list(model.children())
+    X = children[0](X)
 
-#     '''
+    layer_types = [torch.nn.modules.conv.Conv1d,
+                   torch.nn.modules.conv.Conv2d,
+                   torch.nn.modules.linear.Linear,
+                   torch.nn.modules.container.ModuleList]
 
-#     d= Y.shape[1]
-#     point = []
+    deviations = []
+    for child in children[1:]:
+        if type(child) in layer_types:
+            X_np = X.detach().numpy()
+            std = np.std(X_np, axis = 0)
+            deviations.append(std)
+        X = child(X)
 
-#     for n in range(d):
-#         point += [np.median(Y[:,n])]
-
-#     return np.array(point)
-
-
-
-# # copied from https://stackoverflow.com/questions/30299267/geometric-median-of-multidimensional-points
-# def geometric_median(X, eps=1e-5):
-
-#     y = np.mean(X, 0)
-
-#     while True:
-#         D = cdist(X, [y])
-#         nonzeros = (D != 0)[:, 0]
-
-#         Dinv = 1 / D[nonzeros]
-#         Dinvs = np.sum(Dinv)
-#         W = Dinv / Dinvs
-#         T = np.sum(W * X[nonzeros], 0)
-
-#         num_zeros = len(X) - np.sum(nonzeros)
-#         if num_zeros == 0:
-#             y1 = T
-#         elif num_zeros == len(X):
-#             return y
-#         else:
-#             R = (T - y) * Dinvs
-#             r = np.linalg.norm(R)
-#             rinv = 0 if r == 0 else num_zeros/r
-#             y1 = max(0, 1-rinv)*T + min(1, rinv)*y
-
-#         if euclidean(y, y1) < eps:
-#             return y1
-#         y = y1
+    X_np = X.detach().numpy()
+    std = np.std(X_np, axis = 0)
+    deviations.append(std)
+    
+    return deviations
 
 def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = True, adjust_variance = True, verbose = False, iso = False):
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
     compressedCostVectors = []
+
+    if len(X.shape)>2:
+        X_temp = np.array([x.flatten() for x in X])
+    layerwise_deviations = layerwise_deviation(model, X_temp)
+    layerwise_deviations.reverse()  
 
     for l, child in enumerate(model.children()):
 
@@ -637,46 +607,43 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
             X, R, C = reinitialise_conv_layer(child, X, Y, R, C,
                                               # return_cost_vector = return_cost_vector, # todo? no!
                                               adjust_regions = adjust_regions,
-                                              adjust_variance = adjust_variance)
+                                              target_deviation = layerwise_deviations.pop())
+            compressedCostVectors.append(compress_region_cost_vector(C))
+        elif type(child)==torch.nn.modules.linear.Linear:
+            # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
+            if verbose and adjust_regions:
+                print("Reinitialising child", l,"of type", type(child))
+            elif verbose and adjust_variance:
+                print("Adjusting child", l,"of type", type(child))
+            elif verbose:
+                print("Passing child", l,"of type", type(child))
+            if len(X.shape)>2:
+                X = np.array([x.flatten() for x in X])
+            X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
+                                                return_cost_vector = return_cost_vector,
+                                                adjust_regions = adjust_regions,
+                                                target_deviation = layerwise_deviations.pop())
+            compressedCostVectors.append(compress_region_cost_vector(C))
+        elif type(child)==torch.nn.modules.container.ModuleList:
+            # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
+            if verbose and adjust_regions:
+                print("Reinitialising child", l,"of type", type(child))
+            elif verbose and adjust_variance:
+                print("Adjusting child", l,"of type", type(child))
+            elif verbose:
+                print("Passing child", l,"of type", type(child))
+            if len(X.shape)>2:
+                X = np.array([x.flatten() for x in X])
+            X, R, C = reinitialise_maxout_layer(child, X, Y, R, C,
+                                                return_cost_vector = return_cost_vector,
+                                                adjust_regions = adjust_regions,
+                                                target_deviation = layerwise_deviations.pop())
             compressedCostVectors.append(compress_region_cost_vector(C))
         else:
-            if type(child)==torch.nn.modules.linear.Linear:
-                # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
-                if verbose and adjust_regions:
-                    print("Reinitialising child", l,"of type", type(child))
-                elif verbose and adjust_variance:
-                    print("Adjusting child", l,"of type", type(child))
-                elif verbose:
-                    print("Passing child", l,"of type", type(child))
-                if len(X.shape)>2:
-                    X = np.array([x.flatten() for x in X])
-                X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
-                                                  return_cost_vector = return_cost_vector,
-                                                  adjust_regions = adjust_regions,
-                                                  adjust_variance = adjust_variance,
-                                                  iso = iso)
-                compressedCostVectors.append(compress_region_cost_vector(C))
-            elif type(child)==torch.nn.modules.container.ModuleList:
-                # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
-                if verbose and adjust_regions:
-                    print("Reinitialising child", l,"of type", type(child))
-                elif verbose and adjust_variance:
-                    print("Adjusting child", l,"of type", type(child))
-                elif verbose:
-                    print("Passing child", l,"of type", type(child))
-                if len(X.shape)>2:
-                    X = np.array([x.flatten() for x in X])
-                X, R, C = reinitialise_maxout_layer(child, X, Y, R, C,
-                                                    return_cost_vector = return_cost_vector,
-                                                    adjust_regions = adjust_regions,
-                                                    adjust_variance = adjust_variance,
-                                                    iso = iso)
-                compressedCostVectors.append(compress_region_cost_vector(C))
-            else:
-                if verbose:
-                    print("Passing child", l,"of type", type(child))
-                X = child(torch.tensor(X)).detach().numpy()
-                # todo: check if layer supported, print warning if not
+            if verbose:
+                print("Passing child", l,"of type", type(child))
+            X = child(torch.tensor(X)).detach().numpy()
+            # todo: check if layer supported, print warning if not
 
     return compressedCostVectors
 
@@ -789,7 +756,7 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
 
         # adjust weights and biases to control the variance:
         for child in children:
-            fix_child_variance(child, Xtemp, iso)
+            fix_child_deviation(child, Xtemp, iso)
 
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
@@ -799,7 +766,10 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
     return X, R, C
 
 
-def reinitialise_relu_layer(child, X, Y, R = [], C = [], return_cost_vector = False, adjust_regions = True, adjust_variance = True, iso = False):
+def reinitialise_relu_layer(child, X, Y, R = [], C = [], 
+                            return_cost_vector = False, 
+                            adjust_regions = True, 
+                            target_deviation = []):
 
     if len(R) == 0 or len(C) == 0:
         N = X.shape[0] # number of data points
@@ -869,7 +839,8 @@ def reinitialise_relu_layer(child, X, Y, R = [], C = [], return_cost_vector = Fa
         elif stage == 1:
             if adjust_regions:
                 print("reinitialising unit",k)
-            wb = hyperplanes_through_largest_regions(X, R, C)
+            w = child.weight[k,:].detach().numpy()
+            wb = hyperplanes_through_largest_regions(X, R, C, w = w)
             R, C = update_regions_and_costs(R, C,
                                             [linear(wbj) for wbj in wb],
                                             X, Y, CE_region_cost,
@@ -896,12 +867,12 @@ def reinitialise_relu_layer(child, X, Y, R = [], C = [], return_cost_vector = Fa
 
     # step 3: adjust weights to control variance and forward X
     # compute image of the dataset under the current parameters:
-    if adjust_variance == True:
+    if not target_deviation == []:
         with torch.no_grad():
             Xtemp = nn.ReLU()(child(torch.tensor(X))).numpy()
 
         # adjust weights and biases to control the variance:
-        fix_child_variance(child, Xtemp, iso)
+        fix_child_deviation(child, Xtemp, target_deviation)
 
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
@@ -989,7 +960,7 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
             Xtemp = nn.ReLU()(child(X)).numpy()
 
         # adjust weights and biases to control the variance:
-        fix_child_variance(child, Xtemp)
+        fix_child_deviation(child, Xtemp)
 
     # compute image of the dataset under the adjusted parameters
     with torch.no_grad():
@@ -1143,7 +1114,7 @@ def reinitialise_conv_layer(child, X, Y, R = False, C = False,
 #             Xtemp = nn.ReLU()(child(torch.tensor(X))).numpy()
 
 #         # adjust weights and biases to control the variance:
-#         fix_child_variance(child, Xtemp)
+#         fix_child_deviation(child, Xtemp)
 
 #     # compute image of the dataset under the adjusted parameters
 #     with torch.no_grad():
@@ -1195,3 +1166,58 @@ def compress_region_cost_vector(C):
         compressedCostVector.append([currentRegionCost,currentRegionCardinality,1])
 
     return compressedCostVector
+
+# def marginal_median(Y):
+#     '''
+#     Find the marginal median of a data set Y.
+
+#     Parameters
+#     ----------
+#     Y : List or Array
+#         Data set in R^n.
+
+#     Returns
+#     -------
+#     Array
+#         Component-wise median point in R^n.
+
+#     '''
+
+#     d= Y.shape[1]
+#     point = []
+
+#     for n in range(d):
+#         point += [np.median(Y[:,n])]
+
+#     return np.array(point)
+
+
+
+# # copied from https://stackoverflow.com/questions/30299267/geometric-median-of-multidimensional-points
+# def geometric_median(X, eps=1e-5):
+
+#     y = np.mean(X, 0)
+
+#     while True:
+#         D = cdist(X, [y])
+#         nonzeros = (D != 0)[:, 0]
+
+#         Dinv = 1 / D[nonzeros]
+#         Dinvs = np.sum(Dinv)
+#         W = Dinv / Dinvs
+#         T = np.sum(W * X[nonzeros], 0)
+
+#         num_zeros = len(X) - np.sum(nonzeros)
+#         if num_zeros == 0:
+#             y1 = T
+#         elif num_zeros == len(X):
+#             return y
+#         else:
+#             R = (T - y) * Dinvs
+#             r = np.linalg.norm(R)
+#             rinv = 0 if r == 0 else num_zeros/r
+#             y1 = max(0, 1-rinv)*T + min(1, rinv)*y
+
+#         if euclidean(y, y1) < eps:
+#             return y1
+#         y = y1
