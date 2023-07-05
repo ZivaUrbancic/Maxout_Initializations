@@ -581,7 +581,7 @@ def layerwise_deviation(model, X):
     X_np = X.detach().numpy()
     std = np.std(X_np, axis = 0)
     deviations.append(std)
-    
+
     return deviations
 
 def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = True, adjust_variance = True, verbose = False, iso = False):
@@ -593,7 +593,7 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
     if len(X.shape)>2:
         X_temp = np.array([x.flatten() for x in X])
     layerwise_deviations = layerwise_deviation(model, X_temp)
-    layerwise_deviations.reverse()  
+    layerwise_deviations.reverse()
 
     for l, child in enumerate(model.children()):
 
@@ -620,9 +620,9 @@ def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions
             if len(X.shape)>2:
                 X = np.array([x.flatten() for x in X])
             X, R, C = reinitialise_relu_layer(child, X, Y, R, C,
-                                                return_cost_vector = return_cost_vector,
-                                                adjust_regions = adjust_regions,
-                                                target_deviation = layerwise_deviations.pop())
+                                              return_cost_vector = return_cost_vector,
+                                              adjust_regions = adjust_regions,
+                                              target_deviation = layerwise_deviations.pop())
             compressedCostVectors.append(compress_region_cost_vector(C))
         elif type(child)==torch.nn.modules.container.ModuleList:
             # 1D-layers, flatten data if multi-dimensional, e.g., 2D images in MNIST and CIFAR10
@@ -766,9 +766,9 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
     return X, R, C
 
 
-def reinitialise_relu_layer(child, X, Y, R = [], C = [], 
-                            return_cost_vector = False, 
-                            adjust_regions = True, 
+def reinitialise_relu_layer(child, X, Y, R = [], C = [],
+                            return_cost_vector = False,
+                            adjust_regions = True,
                             target_deviation = []):
 
     if len(R) == 0 or len(C) == 0:
@@ -867,7 +867,7 @@ def reinitialise_relu_layer(child, X, Y, R = [], C = [],
 
     # step 3: adjust weights to control variance and forward X
     # compute image of the dataset under the current parameters:
-    if not target_deviation == []:
+    if not len(target_deviation) == 0:
         with torch.no_grad():
             Xtemp = nn.ReLU()(child(torch.tensor(X))).numpy()
 
