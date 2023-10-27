@@ -561,41 +561,54 @@ def k_th_largest_region_cost(C,k):
 
 
 
-def layerwise_deviation(model, X):
+def layerwise_deviation(model, X_in):
+    '''
+    Return a list of (standard) deviations of the input data `X_in` before each preactivation layer of the model `model`.
+    '''
 
-    X = torch.tensor(X)
+    preactivation_layer_types = [torch.nn.modules.conv.Conv1d,
+                                 torch.nn.modules.conv.Conv2d,
+                                 torch.nn.modules.linear.Linear,
+                                 torch.nn.modules.container.ModuleList]
     children = list(model.children())
-    X = children[0](X)
-
-    layer_types = [torch.nn.modules.conv.Conv1d,
-                   torch.nn.modules.conv.Conv2d,
-                   torch.nn.modules.linear.Linear,
-                   torch.nn.modules.container.ModuleList]
-
     deviations = []
+
+    X = torch.tensor(X_in)
+    X = children[0](X) # apply zeroth layer
     for child in children[1:]:
-        if type(child) in layer_types:
+        # if child is a preactivation layer
+        # record the standard deviation of X
+        # before passing X through it
+        if type(child) in preactivation_layer_types:
             X_np = X.detach().numpy()
             std = np.std(X_np, axis = 0)
             deviations.append(std)
         X = child(X)
 
+    # record the final standard deviation of X
     X_np = X.detach().numpy()
     std = np.std(X_np, axis = 0)
     deviations.append(std)
 
     return deviations
 
-def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = True, adjust_variance = True, verbose = False, iso = False):
+def reinitialise_network(model, X, Y, return_cost_vector = False, adjust_regions = False, adjust_variance = False, verbose = False, iso = False):
     N = X.shape[0] # number of data points
     R = initialise_region_matrix(N)
     C = initialise_costs_vector(N)
     compressedCostVectors = []
 
+    # if adjust_regions == True, assert that adjust_variance == True
+    assert adjust_regions == False or (adjust_regions == True and adjust_variance == True)
+
     if len(X.shape)>2:
         X_temp = np.array([x.flatten() for x in X])
-    layerwise_deviations = layerwise_deviation(model, X_temp)
-    layerwise_deviations.reverse()
+
+    if adjust_variance:
+        layerwise_deviations = layerwise_deviation(model, X_temp)
+        layerwise_deviations.reverse()
+    else:
+        layerwise_deviations = [[] for child in model.children()]
 
     for l, child in enumerate(model.children()):
 
@@ -770,7 +783,7 @@ def reinitialise_maxout_layer(children, X, Y, R = False, C = False, return_cost_
 
 def reinitialise_relu_layer(child, X, Y, R = [], C = [],
                             return_cost_vector = False,
-                            adjust_regions = True,
+                            adjust_regions = False,
                             target_deviation = []):
 
     if len(R) == 0 or len(C) == 0:
@@ -779,7 +792,6 @@ def reinitialise_relu_layer(child, X, Y, R = [], C = [],
         C = initialise_costs_vector(N)
 
     number_of_classes = len(set(Y))
-    # step 0: check whether maxout_rank > number of regions
     if not adjust_regions:
         # no adjusting regions, go to stage 0 or 2 depending on whether
         # cost vector needs to be computed
@@ -788,6 +800,7 @@ def reinitialise_relu_layer(child, X, Y, R = [], C = [],
         else:
             stage = 2
     else:
+        # step 0: check whether number of regions > 1
         c = k_th_largest_region_cost(C,0)
         if return_cost_vector:
             # adjusting regions and cost vector needs to be computed,
@@ -869,7 +882,7 @@ def reinitialise_relu_layer(child, X, Y, R = [], C = [],
 
     # step 3: adjust weights to control variance and forward X
     # compute image of the dataset under the current parameters:
-    if not len(target_deviation) == 0:
+    if len(target_deviation)>0:
         with torch.no_grad():
             Xtemp = nn.ReLU()(child(torch.tensor(X))).numpy()
 
