@@ -526,9 +526,11 @@ def fix_child_deviation(child, X, target_deviation):
             child.weight /= std_scale.reshape(-1, 1, 1)
         else:
             target_deviation[target_deviation == 0] = 1
-            std_scale  /= target_deviation
+            target_deviation = torch.tensor(target_deviation)
+            # std_scale  /= target_deviation
             child.weight /= std_scale.reshape(-1, 1)
-            child.bias /= std_scale
+            child.weight *= target_deviation.reshape(-1, 1)
+            child.bias *= target_deviation/std_scale
 
 def k_th_largest_region_cost(C,k):
     '''
