@@ -1,0 +1,3 @@
+# Initialization of Deep Neural Networks with ReLU Activation
+
+Linear regions of networks with piecewise linear activation play an important role in their understanding. Since networks with higher number and more even spread of linear regions are believed to be able to approximate a richer class of functions, it may be beneficial to maximize their number. We implement our own initialization strategy with that aim, and run experiments comparing it with more standard strategies. We trained the networks (with 2 hidden layers of 10 units each and ReLU activation) for classification on MNIST data set. The code for experiments with isotropic scaling can be found on [isoscale branch](ZivaUrbancic/Maxout_Initializations/tree/isoscale).
